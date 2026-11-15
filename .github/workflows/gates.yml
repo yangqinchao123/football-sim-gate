@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,7 +32,7 @@ jobs:
 
       - name: Secret leak guard (fail if secrets staged)
         run: |
-          if grep -rInE "(TQ_PW=|password\s*=|BEGIN .*PRIVATE KEY)" gates lib framework 2>/dev/null; then
+          if grep -rInE "(TQ_PW=|password\s*=|BEGIN .*PRIVATE KEY)" gates lib framework daily 2>/dev/null; then
             echo "::error::检测到疑似密钥/密码，禁止合并"
             exit 1
           fi
@@ -38,3 +40,21 @@ jobs:
 
       - name: Gate smoke test
         run: python gates/smoke_test.py
+
+      # 关键：门禁必须真的"判定"，不能只编译。对本次变更涉及的每个批次，
+      # 重算 S0..goal 全部阶段，任一 BLOCK 即红叉、不可合并。
+      - name: Stage gate verify (批次状态机)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -e
+          if [ -z "$BASE_REF" ]; then echo "非 PR 事件，跳过批次校验"; exit 0; fi
+          git fetch --no-tags origin "$BASE_REF" --depth=1 || true
+          CHANGED=$(git diff --name-only "origin/$BASE_REF"...HEAD || true)
+          BATCHES=$(echo "$CHANGED" | grep -E '^daily/' | cut -d/ -f2 | sed 's/.*_//' | sort -u || true)
+          if [ -z "$BATCHES" ]; then echo "本次变更不涉及批次产物"; exit 0; fi
+          for B in $BATCHES; do
+            echo "===== 校验批次 $B ====="
+            python gates/stage_gate.py "$B" verify
+          done
+          echo "Stage gate verify: 全部批次达到声明目标"

@@ -1,21 +1,33 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 stage_gate.py — 足球模拟盘全流程阶段闸门（状态机）
+
 规则（硬）：
   1. 每个阶段一道机器门，检查函数只读真实产物，不接受口头/手写放行。
   2. 前一阶段未 PASS，当前阶段一律 BLOCK（顺序锁），无法跳过。
   3. 阶段状态只能由检查函数计算落盘，禁止手动标 PASS。
+  4. 门禁必须对"任意批次"成立：场次数、进票腿、探球可用性一律由批次配置驱动，
+     不得把某一天的编号写死在检查器里（历史版本写死 005/011/012/013/017/022/026/027 与 ≥20 场，
+     结果新批次永远 PASS 不了，闸门形同虚设）。
+
 用法：
-  python3 stage_gate.py <batch> status                 # 看全流程状态
-  python3 stage_gate.py <batch> check <stage_id>       # 校验某阶段（自动先查前置）
-  python3 stage_gate.py <batch> run                    # 从第一个未过阶段顺序跑到被阻断
-  python3 stage_gate.py <batch> reset                  # 重置状态文件（需二次确认，见下）
+  python3 gates/stage_gate.py <batch> status                 # 看全流程状态
+  python3 gates/stage_gate.py <batch> check <stage_id>       # 校验某阶段（自动先查前置）
+  python3 gates/stage_gate.py <batch> run                    # 顺序跑到第一个未过阶段
+  python3 gates/stage_gate.py <batch> verify [--goal S6]     # CI 用：重算全部并确认达到 goal
+  python3 gates/stage_gate.py <batch> reset --yes            # 重置状态
 """
-import json, os, sys, glob, datetime, re
+import glob
+import json
+import os
+import re
+import sys
+import datetime
 
-WS = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WS = ROOT   # 修正：历史版本 WS=dirname(__file__)=gates/，所有产物路径错位，闸门恒 BLOCK
 
-# 阶段定义（顺序即流程，不可乱序）。每个 check(ctx)->(bool, str)
 STAGES = [
     ("S0", "M0 数据健康前置"),
     ("S1", "早盘官方 SP 取数"),
@@ -32,25 +44,38 @@ STAGES = [
 ]
 STAGE_IDS = [s[0] for s in STAGES]
 
+
+def now():
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
 class Ctx:
     def __init__(self, batch):
         self.batch = batch
         self.day = os.path.join(WS, "daily", self._day_dir(batch))
         self.state_path = os.path.join(WS, f"{batch}_stage_state.json")
         self.state = self._load()
+
     def _day_dir(self, batch):
-        # 兼容：找 daily 下含该 batch 的目录（大小写不敏感）
         hits = [d for d in glob.glob(os.path.join(WS, "daily", "*"))
                 if os.path.isdir(d) and d.lower().endswith("_" + batch.lower())]
         return os.path.basename(hits[0]) if hits else ""
+
     def _load(self):
         if os.path.exists(self.state_path):
             return json.load(open(self.state_path))
         return {sid: {"status": "pending", "ts": None, "detail": ""} for sid in STAGE_IDS}
+
     def save(self):
         json.dump(self.state, open(self.state_path, "w"), ensure_ascii=False, indent=1)
+
     def f(self, *p):
         return os.path.join(self.day, *p)
+
+    def cfg(self):
+        p = os.path.join(WS, f"{self.batch}_config.json")
+        return json.load(open(p)) if os.path.exists(p) else {}
+
 
 # ---------- 各阶段检查函数（只读真实产物）----------
 def chk_S0(c):
@@ -61,6 +86,7 @@ def chk_S0(c):
     ok = ("PASS" in t) and ("断档" in t)
     return ok, "M0 PASS" if ok else "M0 未标 PASS/断档"
 
+
 def chk_S1(c):
     p = os.path.join(WS, f"g0{c.batch}_parsed.json")
     if not os.path.exists(p):
@@ -68,59 +94,85 @@ def chk_S1(c):
     rows = json.load(open(p))
     if not rows:
         return False, "早盘数据为空"
-    return True, f"早盘 {len(rows)} 场，基准只读"
+    return True, "早盘 %d 场，基准只读" % len(rows)
+
 
 def chk_S2(c):
-    tq = glob.glob(os.path.join(WS, f"tq_{c.batch}", "ai_*.txt"))
+    """探球场次阈值由配置驱动；探球不可用时必须有可核验留痕（原因+探测时间+证据）。"""
+    cfg = c.cfg()
+    min_tq = int(cfg.get("min_tq", 8))
+    tq = glob.glob(os.path.join(WS, "tq_%s" % c.batch, "ai_*.txt"))
     cross = glob.glob(c.f("*双源*"))
-    if len(tq) < 8:
-        return False, f"探球情报仅 {len(tq)} 场（需≥8）"
+    if len(tq) < min_tq:
+        un = os.path.join(WS, "tq_%s_unavailable.json" % c.batch)
+        if not os.path.exists(un):
+            return False, "探球情报仅 %d/%d 场，且无不可用留痕" % (len(tq), min_tq)
+        u = json.load(open(un))
+        for k in ("reason", "probed_at", "evidence"):
+            if not u.get(k):
+                return False, "探球不可用留痕缺 %s（禁止口头声明）" % k
     if not cross:
         return False, "缺双源交叉验证"
-    return True, f"探球 {len(tq)} 场 + 双源交叉"
+    detail = "探球 %d 场" % len(tq) if len(tq) >= min_tq else "探球不可用(已留痕) + 公开多源"
+    return True, detail + "，双源交叉已留痕"
+
 
 def chk_S3(c):
-    p = os.path.join(WS, f"{c.batch}_model_out.json")
+    p = os.path.join(WS, "%s_model_out.json" % c.batch)
     if not os.path.exists(p):
         return False, "缺模型输出"
     m = json.load(open(p))
     modeled = [n for n, r in m.items() if r.get("pb_dc")]
     if not modeled:
         return False, "无 penaltyblog 模型场"
-    return True, f"penaltyblog 建模 {len(modeled)} 场（其余 null 已标注）"
+    return True, "penaltyblog 建模 %d 场（其余 null 已标注）" % len(modeled)
+
 
 def chk_S4(c):
+    """进票腿由批次配置声明；无腿必须显式声明，禁止用"没有腿"静默绕过颗粒度检查。"""
+    cfg = c.cfg()
+    legs = [str(x) for x in cfg.get("legs", [])]
     grc = glob.glob(c.f("*完整GRC*"))
+    if not legs:
+        decl = glob.glob(c.f("*无进票腿*"))
+        if not decl:
+            return False, "批次未声明 legs，也未声明『无进票腿』（禁止静默空手过闸）"
+        return True, "本批无进票腿，已显式声明"
     if not grc:
         return False, "缺完整 GRC 文件"
     text = "".join(open(p, errors="ignore").read() for p in grc)
-    legs = ("005", "011", "012", "013", "017", "022", "026", "027")
     blocks = {m.group(1): m.group(0) for m in
               re.finditer(r"##\s*(\d{3})[\s\S]*?(?=##\s*\d{3}|$)", text)}
     tags = ("预测首发", "关键对位", "替代者三问", "C4", "F7")
     for n in legs:
         blk = blocks.get(n, "")
         if not blk:
-            return False, f"场{n} 缺独立 GRC 段"
+            return False, "场%s 缺独立 GRC 段" % n
         for tg in tags:
             if tg not in blk:
-                return False, f"场{n} GRC 缺【{tg}】"
+                return False, "场%s GRC 缺【%s】" % (n, tg)
         if "裁判" not in blk:
-            return False, f"场{n} 缺裁判项"
-    return True, f"8 条进票腿 GRC 颗粒度齐全"
+            return False, "场%s 缺裁判项" % n
+    return True, "%d 条进票腿 GRC 颗粒度齐全" % len(legs)
+
 
 def chk_S5(c):
-    p = os.path.join(WS, f"{c.batch}_final_picks.json")
+    """全方向表必须覆盖早盘全部场次（不再硬编码 ≥20 场）。"""
+    p = os.path.join(WS, "%s_final_picks.json" % c.batch)
     if not os.path.exists(p):
         return False, "缺全方向表"
     d = json.load(open(p))
-    if len(d) < 20:
+    g0p = os.path.join(WS, "g0%s_parsed.json" % c.batch)
+    need = len(json.load(open(g0p))) if os.path.exists(g0p) else 0
+    if need and len(d) < need:
+        return False, "全方向表 %d/%d 场，覆盖不全" % (len(d), need)
+    if len(d) < int(c.cfg().get("min_picks", 1)):
         return False, "全方向表覆盖不足"
-    return True, f"全方向表 {len(d)} 场已交付，待 owner 确认"
+    return True, "全方向表 %d/%d 场全覆盖，待 owner 确认" % (len(d), need)
+
 
 def chk_S6(c):
-    # 强制 owner 确认留痕，缺即 BLOCK（堵"自己定方向"）
-    p = c.f(f"{c.batch}_owner方向确认.json")
+    p = c.f("%s_owner方向确认.json" % c.batch)
     if not os.path.exists(p):
         return False, "缺 owner 方向确认文件（禁止未确认即配单）"
     o = json.load(open(p))
@@ -129,17 +181,18 @@ def chk_S6(c):
     n = len(o.get("approved_nums", []))
     if n < 1:
         return False, "确认场次为空"
-    return True, f"owner 已确认 {n} 场方向（{o.get('ts')}）"
+    return True, "owner 已确认 %d 场方向（%s）" % (n, o.get("ts"))
+
 
 def chk_S7(c):
+    """两个独立子 agent 的产物：关1 碰撞 + 关2 流程审计，缺一即 BLOCK。"""
     g1 = os.path.join(WS, "audit_g1", "clash_record.json")
     g2 = os.path.join(WS, "audit_g2", "clash_record_g2.json")
     r1 = os.path.join(WS, "audit_g1", "audit_g1_result.json")
     r2 = os.path.join(WS, "audit_g2", "audit_g2_result.json")
     for p in (g1, g2, r1, r2):
         if not os.path.exists(p):
-            return False, f"缺独立审计产物 {os.path.basename(p)}"
-    # 分歧场 clash_rounds≥2
+            return False, "缺独立审计产物 %s" % os.path.relpath(p, WS)
     for p in (g1, g2):
         d = json.load(open(p))
         items = d if isinstance(d, list) else d.get("clashes", list(d.values()))
@@ -148,31 +201,29 @@ def chk_S7(c):
                 return False, "存在分歧场仅单轮收口（需≥2）"
     return True, "关1/关2 独立碰撞收敛，分歧场多轮对质"
 
+
 def chk_S8(c):
-    live = os.path.join(WS, f"g0{c.batch}_live_raw", "parsed.json")
+    live = os.path.join(WS, "g0%s_live_raw" % c.batch, "parsed.json")
     if not os.path.exists(live):
         return False, "缺临场 live SP（另存）"
     rows = json.load(open(live))
     if not rows:
         return False, "临场数据为空"
-    # 漂移检查在 live_check 已算，这里确认有产物；首发/红队在 GRC 留痕
-    return True, f"live SP 已另存 {len(rows)} 场，漂移/首发/红队已核"
+    return True, "live SP 已另存 %d 场，漂移/首发/红队已核" % len(rows)
+
 
 def chk_S9(c):
-    p = os.path.join(WS, f"{c.batch}_tickets.json")
+    p = os.path.join(WS, "%s_tickets.json" % c.batch)
     if not os.path.exists(p):
         return False, "缺配单文件"
     tk = json.load(open(p))
     if not tk:
         return False, "配单为空"
-    plays = set()
-    for t in tk:
-        plays.add(t.get("play", "HAD"))  # 无 play 字段默认 HAD
+    plays = set(t.get("play", "HAD") for t in tk)
     if "HAD" not in plays:
         return False, "缺 HAD 玩法票"
     if "HHAD" not in plays:
         return False, "缺 HHAD 让球玩法票（玩法覆盖不全）"
-    # 注码纪律：单腿承载 ≤50%
     total = sum(t["stake"] for t in tk)
     load = {}
     for t in tk:
@@ -180,11 +231,11 @@ def chk_S9(c):
             load[n] = load.get(n, 0) + t["stake"]
     for n, v in load.items():
         if v / total > 0.50:
-            return False, f"场{n} 单腿承载 {v/total:.0%} >50%"
-    return True, f"{len(tk)} 票覆盖 HAD+HHAD，承载合规，总注码 {total}"
+            return False, "场%s 单腿承载 %d%% >50%%" % (n, round(v / total * 100))
+    return True, "%d 票覆盖 HAD+HHAD，承载合规，总注码 %s" % (len(tk), total)
+
 
 def chk_S10(c):
-    gate = os.path.join(WS, "pre_ticket_gate.py")
     locked = glob.glob(c.f("*LOCKED*"))
     if not locked:
         return False, "缺 LOCKED 锁定单"
@@ -193,68 +244,100 @@ def chk_S10(c):
         return False, "锁定单未标 LOCKED"
     return True, "出票闸门 PASS + LOCKED 单已生成"
 
+
 def chk_S11(c):
     sett = glob.glob(c.f("*settlement*")) + glob.glob(c.f("*结算*"))
     if not sett:
         return False, "缺结算单（赛后回填）"
     return True, "结算/归因/台账已回填"
 
-CHECKS = {
-    "S0": chk_S0, "S1": chk_S1, "S2": chk_S2, "S3": chk_S3,
-    "S4": chk_S4, "S5": chk_S5, "S6": chk_S6, "S7": chk_S7,
-    "S8": chk_S8, "S9": chk_S9, "S10": chk_S10, "S11": chk_S11,
-}
 
-def check_stage(c, sid):
+CHECKS = {"S0": chk_S0, "S1": chk_S1, "S2": chk_S2, "S3": chk_S3, "S4": chk_S4, "S5": chk_S5,
+          "S6": chk_S6, "S7": chk_S7, "S8": chk_S8, "S9": chk_S9, "S10": chk_S10, "S11": chk_S11}
+
+
+def check_stage(c, sid, persist=True):
     idx = STAGE_IDS.index(sid)
-    # 顺序锁：前置必须全 PASS
     for pre in STAGE_IDS[:idx]:
         if c.state[pre]["status"] != "pass":
-            c.state[sid] = {"status": "blocked", "ts": now(),
-                            "detail": f"前置阶段 {pre} 未 PASS，顺序锁拦截"}
-            c.save()
-            return False, c.state[sid]["detail"]
+            if persist:
+                c.state[sid] = {"status": "blocked", "ts": now(),
+                                "detail": "前置阶段 %s 未 PASS，顺序锁拦截" % pre}
+                c.save()
+            return False, "前置阶段 %s 未 PASS，顺序锁拦截" % pre
     ok, detail = CHECKS[sid](c)
-    c.state[sid] = {"status": "pass" if ok else "blocked",
-                    "ts": now(), "detail": detail}
-    c.save()
+    if persist:
+        c.state[sid] = {"status": "pass" if ok else "blocked", "ts": now(), "detail": detail}
+        c.save()
     return ok, detail
 
-def now():
-    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-def main():
-    batch = sys.argv[1]
-    cmd = sys.argv[2]
+def cmd_status(c):
+    print("批次 %s 全流程阶段闸门状态：" % c.batch)
+    for sid, name in STAGES:
+        st = c.state.get(sid, {})
+        print("  %-3s %-28s [%s] %s" % (sid, name, st.get("status", "pending"), st.get("detail", "")))
+
+
+def cmd_run(c):
+    for sid, name in STAGES:
+        ok, detail = check_stage(c, sid)
+        print("  %-3s %-28s %-5s %s" % (sid, name, "PASS" if ok else "BLOCK", detail))
+        if not ok:
+            print("被阻断于", sid)
+            return 1
+    return 0
+
+
+def cmd_verify(c, goal):
+    """CI 用：顺序重算 S0..goal（不信任已落盘状态），并检测"手标 PASS"。"""
+    goal_idx = STAGE_IDS.index(goal) if goal in STAGE_IDS else len(STAGE_IDS) - 1
+    for sid in STAGE_IDS[:goal_idx + 1]:
+        ok, detail = check_stage(c, sid, persist=False)
+        print("  %-3s %-5s %s" % (sid, "PASS" if ok else "BLOCK", detail))
+        if not ok:
+            print("::error::阶段 %s 未通过：%s" % (sid, detail))
+            return 1
+    bad = 0
+    for sid in STAGE_IDS[goal_idx + 1:]:
+        if c.state.get(sid, {}).get("status") == "pass":
+            ok, detail = check_stage(c, sid, persist=False)
+            if not ok:
+                print("::error::阶段 %s 被手工标 PASS 但复算不通过：%s" % (sid, detail))
+                bad += 1
+    return 1 if bad else 0
+
+
+def main(argv):
+    if len(argv) < 3:
+        print(__doc__)
+        return 2
+    batch, cmd = argv[1], argv[2]
     c = Ctx(batch)
     if cmd == "status":
-        print(f"批次 {batch} 全流程阶段闸门状态：")
-        for sid, name in STAGES:
-            st = c.state[sid]
-            mark = {"pass": "PASS", "blocked": "BLOCK", "pending": "待办"}[st["status"]]
-            print(f"  {sid} {name:<28}[{mark}] {st['detail']}")
-        return
+        cmd_status(c); return 0
     if cmd == "check":
-        sid = sys.argv[3]
-        ok, detail = check_stage(c, sid)
-        print(("PASS — " if ok else "BLOCKED — ") + detail)
-        sys.exit(0 if ok else 1)
+        ok, detail = check_stage(c, argv[3])
+        print(("PASS" if ok else "BLOCK"), detail)
+        return 0 if ok else 1
     if cmd == "run":
-        for sid in STAGE_IDS:
-            if c.state[sid]["status"] == "pass":
-                continue
-            ok, detail = check_stage(c, sid)
-            print(f"{sid}: " + ("PASS — " if ok else "BLOCKED — ") + detail)
-            if not ok:
-                print("顺序闸门在此阻断，后续阶段禁止启动。")
-                sys.exit(1)
-        print("全部阶段 PASS。")
-        return
+        return cmd_run(c)
+    if cmd == "verify":
+        goal = "S6"
+        for i, a in enumerate(argv):
+            if a == "--goal" and i + 1 < len(argv):
+                goal = argv[i + 1]
+        p = os.path.join(WS, "%s_goal.json" % batch)
+        if os.path.exists(p):
+            goal = json.load(open(p)).get("goal_stage", goal)
+        return cmd_verify(c, goal)
     if cmd == "reset":
+        if "--yes" not in argv:
+            print("reset 需 --yes"); return 2
         c.state = {sid: {"status": "pending", "ts": None, "detail": ""} for sid in STAGE_IDS}
-        c.save()
-        print("状态已重置。")
-        return
+        c.save(); print("reset done"); return 0
+    print(__doc__); return 2
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv))
