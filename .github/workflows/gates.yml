@@ -36,8 +36,5 @@ jobs:
           fi
           echo "No hardcoded secrets."
 
-      - name: Gate self-check
-        run: |
-          python gates/gate_selfcheck.py || python - <<'PY'
-          print("gate self-check placeholder passed")
-PY
+      - name: Gate smoke test
+        run: python gates/smoke_test.py
