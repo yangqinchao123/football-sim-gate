@@ -50,17 +50,19 @@ jobs:
         run: |
           set -o pipefail
           if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ]; then
-            echo "非 PR 事件，跳过批次校验"; exit 0
+            echo "非 PR 事件（main 已由分支保护强制走 PR，此处仅记录）"; exit 0
           fi
-          # 不用 --depth=1：浅取会丢 merge-base，导致 diff 为空、闸门被静默跳过（D42 首轮即此故障）
           git fetch --no-tags origin "$BASE_SHA" || { echo "::error::无法取到 base sha"; exit 1; }
-          # core.quotePath=false：中文路径默认会被转义成 "daily/...\346\225..."，导致 ^daily/ 匹配不上（D42 第二轮故障）
           CHANGED=$(git -c core.quotePath=false diff --name-only "$BASE_SHA"..."$HEAD_SHA") || { echo "::error::git diff 失败，按失败处理"; exit 1; }
           echo "变更文件数: $(echo "$CHANGED" | grep -c . || true)"; echo "$CHANGED" | head -20
-          BATCHES=$(echo "$CHANGED" | grep -E '^daily/' | cut -d/ -f2 | sed 's/.*_//' | sort -u || true)
+          B1=$(echo "$CHANGED" | grep -E '^daily/' | cut -d/ -f2 | sed 's/.*_//' || true)
+          B2=$(echo "$CHANGED" | grep -vE '^daily/' | awk -F/ '{print $NF}' | grep -oE '^(g0)?D[0-9]+_' | sed 's/^g0//; s/_$//' || true)
+          BATCHES=$(printf "%s\n%s\n" "$B1" "$B2" | grep -E '^D[0-9]+$' | sort -u || true)
           if [ -z "$BATCHES" ]; then echo "本次变更不涉及批次产物（infra-only PR）"; exit 0; fi
           for B in $BATCHES; do
             echo "===== 校验批次 $B ====="
-            python gates/stage_gate.py "$B" verify
+            GOAL=$(python3 tools/goal_of.py "$BASE_SHA" "$B")
+            echo "目标阶段 $GOAL（base/head 取高，防 PR 自行降标）"
+            python3 gates/stage_gate.py "$B" verify --goal "$GOAL" || { echo "::error::批次 $B 未达到 $GOAL"; exit 1; }
           done
           echo "Stage gate verify: 全部批次达到声明目标"

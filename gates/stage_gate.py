@@ -79,12 +79,29 @@ class Ctx:
 
 # ---------- 各阶段检查函数（只读真实产物）----------
 def chk_S0(c):
+    """不再只做字符串匹配：必须有可复算的 gap JSON，且断档时必须有补救说明。"""
     p = c.f(f"{c.batch}_M0_数据健康检查.md")
     if not os.path.exists(p):
         return False, "缺 M0 数据健康检查文件"
     t = open(p, errors="ignore").read()
-    ok = ("PASS" in t) and ("断档" in t)
-    return ok, "M0 PASS" if ok else "M0 未标 PASS/断档"
+    if "PASS" not in t and "断档" not in t:
+        return False, "M0 未标 PASS/断档"
+    gj = os.path.join(WS, f"{c.batch}_g1_gap.json")
+    if not os.path.exists(gj):
+        return False, "缺 %s_g1_gap.json（gap 必须脚本实算，禁止手写 PASS）" % c.batch
+    try:
+        o = json.load(open(gj))
+    except Exception as e:
+        return False, "gap JSON 解析失败: %s" % e
+    if not isinstance(o.get("gap_days"), int):
+        return False, "gap_days 必须为整数（脚本计算）"
+    if o["gap_days"] > o.get("threshold_days", 21):
+        if not o.get("gap_triggered"):
+            return False, "gap 超阈值但未标 gap_triggered"
+        rem = o.get("remedy") or {}
+        if not (rem.get("source") and rem.get("artifact")):
+            return False, "断档但无补救来源/产物（应标 null 或不预测）"
+    return True, "M0 PASS（gap_days=%d，可复算）" % o["gap_days"]
 
 
 def chk_S1(c):
@@ -195,10 +212,24 @@ def chk_S7(c):
             return False, "缺独立审计产物 %s" % os.path.relpath(p, WS)
     for p in (g1, g2):
         d = json.load(open(p))
-        items = d if isinstance(d, list) else d.get("clashes", list(d.values()))
+        if isinstance(d, list):
+            items = d
+        else:
+            items = d.get("items") or d.get("clashes") or d.get("records")
+        if not isinstance(items, list) or not items:
+            return False, "%s 无逐项记录（需 items/clashes，且不能为空）" % os.path.relpath(p, WS)
         for it in items:
-            if isinstance(it, dict) and it.get("rounds") == 1:
-                return False, "存在分歧场仅单轮收口（需≥2）"
+            if not isinstance(it, dict):
+                return False, "%s 存在非对象条目" % os.path.relpath(p, WS)
+            vs = str(it.get("verdict", ""))
+            if vs and vs != "agrees" and int(it.get("rounds") or 0) < 2:
+                return False, "分歧项 %s 仅 %s 轮（需≥2）" % (it.get("num") or it.get("id"), it.get("rounds"))
+            if (not vs) and int(it.get("rounds") or 0) == 1:
+                return False, "存在未多轮对质的条目（rounds=1 且无 verdict）"
+        # 独立性：产物必须署名非主 agent
+        agent = str(d.get("agent", ""))
+        if not agent:
+            return False, "%s 缺 agent 署名（无法证明来自独立 agent）" % os.path.relpath(p, WS)
     return True, "关1/关2 独立碰撞收敛，分歧场多轮对质"
 
 
