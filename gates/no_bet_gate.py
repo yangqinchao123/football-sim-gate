@@ -63,6 +63,14 @@ def main(batch):
         if poi:
             if names[max(range(3), key=lambda i: poi[i])] != names[max(range(3), key=lambda i: dc[i])]:
                 reasons.append("N4 泊松与DC首选分裂")
+        # N4b 三模型分裂：手动近期形态 / 红队模型与 pb_dc 首选方向不一致即记分裂
+        # （框架『三模型分裂均不进票』一直没进脚本，是规则盲区，D42 审计后被补上）
+        dcmax = names[max(range(3), key=lambda i: dc[i])]
+        for key, lab in (("manual_recent_form", "手动近期形态"), ("red_dc", "红队DC")):
+            alt = rec.get(key)
+            if alt and len(alt) == 3:
+                if names[max(range(3), key=lambda i: alt[i])] != dcmax:
+                    reasons.append("N4b %s与pb_dc首选分裂(%s vs %s)" % (lab, names[max(range(3), key=lambda i: alt[i])], dcmax))
         f = fair.get(_numkey(num))
         if f:
             diff = abs(f["h"] - f["a"])
