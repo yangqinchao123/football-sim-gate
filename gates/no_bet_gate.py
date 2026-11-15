@@ -1,0 +1,82 @@
+# -*- coding: utf-8 -*-
+"""
+空仓判定闸 no_bet_gate（2026-11-09 新增）
+- 目的：把"模型在均势/爆冷/断档场没优势就该空仓"固化为机器可校验规则，
+  防止为了"每场必给方向"而硬选、硬进票。
+- 注意分层：GRC 预测层每场仍必给方向（研究不能停）；本闸只管【出票层进不进票】。
+- 触发任一条件即该场空仓（不进票），并写明触发项：
+  N1 数据断档且无可靠近期手动模型
+  N2 模型最高概率 < 0.40（无明显优势）
+  N3 H/A 去水概率差 < 0.10（均势）且无硬证据打破
+  N4 纯泊松与 DC 首选方向不一致（模型内部分裂）
+  N5 碰撞记录 final 判定"不进票"
+用法: python3 no_bet_gate.py <batch>
+"""
+import json, os, sys, glob, re
+
+WS = os.path.dirname(os.path.abspath(__file__))
+
+def main(batch):
+    model = json.load(open(os.path.join(WS, f"{batch}_model_out.json")))
+    g0 = json.load(open(os.path.join(WS, f"g0{batch}_parsed.json")))
+    fair = {r["num"][-3:]: r["had"].get("fair") for r in g0 if r.get("had")}
+
+    # 碰撞 final 不进票的场
+    no_bet_clash = set()
+    for cf in glob.glob(os.path.join(WS, "audit_*", "*clash*.json")):
+        try:
+            d = json.load(open(cf))
+            for n, rec in d.items():
+                if "不进票" in str(rec.get("final", "")):
+                    no_bet_clash.add(n)
+        except Exception:
+            continue
+
+    # 断档且无近期手动模型
+    day = glob.glob(os.path.join(WS, "daily", f"*_{batch}"))
+    gap_block = set()
+    if day:
+        for f in glob.glob(os.path.join(day[0], "*M0*")):
+            txt = open(f, errors="ignore").read()
+            if "断档" in txt and "PASS" not in txt:
+                gap_block.add("ALL")
+    manual = set()
+    for f in glob.glob(os.path.join(WS, "**", "*recent_manual*"), recursive=True):
+        manual.add(os.path.basename(f))
+
+    result = {}
+    for num, rec in model.items():
+        reasons = []
+        if not rec.get("pb_dc"):
+            result[num] = {"decision": "NO_BET", "reasons": ["无模型数据(null)"]}
+            continue
+        dc = rec["pb_dc"]; poi = rec.get("pb_poisson")
+        names = ["H", "D", "A"]
+        pmax = max(dc)
+        if pmax < 0.40:
+            reasons.append("N2 模型最高概率<0.40")
+        if poi:
+            if names[max(range(3), key=lambda i: poi[i])] != names[max(range(3), key=lambda i: dc[i])]:
+                reasons.append("N4 泊松与DC首选分裂")
+        f = fair.get(num)
+        if f:
+            diff = abs(f["h"] - f["a"])
+            if diff < 0.10:
+                reasons.append("N3 H/A去水差<0.10均势")
+        if num in no_bet_clash:
+            reasons.append("N5 碰撞判定不进票")
+        if "ALL" in gap_block and not manual:
+            reasons.append("N1 数据断档无近期手动模型")
+        result[num] = {"decision": "NO_BET" if reasons else "ELIGIBLE",
+                       "reasons": reasons, "top_prob": round(pmax, 3)}
+
+    bets = [n for n, v in result.items() if v["decision"] == "ELIGIBLE"]
+    no = {n: v["reasons"] for n, v in result.items() if v["decision"] == "NO_BET"}
+    print(f"批次 {batch}：可进票 {len(bets)} 场，空仓 {len(no)} 场")
+    print("可进票:", sorted(bets, key=int))
+    for n, r in sorted(no.items(), key=lambda x: int(x[0])):
+        print(f"  空仓 {n}: {r}")
+    json.dump(result, open(os.path.join(WS, f"{batch}_no_bet.json"), "w"), ensure_ascii=False, indent=1)
+
+if __name__ == "__main__":
+    main(sys.argv[1])
