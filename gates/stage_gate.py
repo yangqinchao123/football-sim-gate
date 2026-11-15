@@ -298,6 +298,8 @@ def cmd_verify(c, goal):
         if not ok:
             print("::error::阶段 %s 未通过：%s" % (sid, detail))
             return 1
+        # 内存内推进状态：verify 不落盘，但顺序锁必须看到前一阶段已过，否则 S1 永远 BLOCK
+        c.state[sid] = {"status": "pass", "ts": now(), "detail": detail}
     bad = 0
     for sid in STAGE_IDS[goal_idx + 1:]:
         if c.state.get(sid, {}).get("status") == "pass":
