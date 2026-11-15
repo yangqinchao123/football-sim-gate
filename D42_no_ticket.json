@@ -1,0 +1,8 @@
+{
+ "batch": "D42",
+ "tickets": 0,
+ "reason": "闸门实跑 006/008 可进票，出票层逐条否决：006 客胜 EV -0.12；008 无 HAD 池 + 全批 hhad.single=0 不可单关 + 让-4 深盘；其余 5 场 N1/N2/N3/N4b 空仓。过闸腿不足按框架属成功风控。",
+ "declared_by": "main-agent",
+ "declared_at": "2026-11-15 22:20 +08:00",
+ "evidence": ["D42_no_bet.json", "daily/20261115_D42/D42_无进票腿声明.md"]
+}
