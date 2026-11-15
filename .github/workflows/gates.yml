@@ -45,14 +45,19 @@ jobs:
       # 重算 S0..goal 全部阶段，任一 BLOCK 即红叉、不可合并。
       - name: Stage gate verify (批次状态机)
         env:
-          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          set -e
-          if [ -z "$BASE_REF" ]; then echo "非 PR 事件，跳过批次校验"; exit 0; fi
-          git fetch --no-tags origin "$BASE_REF" --depth=1 || true
-          CHANGED=$(git diff --name-only "origin/$BASE_REF"...HEAD || true)
+          set -o pipefail
+          if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ]; then
+            echo "非 PR 事件，跳过批次校验"; exit 0
+          fi
+          # 不用 --depth=1：浅取会丢 merge-base，导致 diff 为空、闸门被静默跳过（D42 首轮即此故障）
+          git fetch --no-tags origin "$BASE_SHA" || { echo "::error::无法取到 base sha"; exit 1; }
+          CHANGED=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA") || { echo "::error::git diff 失败，按失败处理"; exit 1; }
+          echo "变更文件数: $(echo "$CHANGED" | grep -c . || true)"
           BATCHES=$(echo "$CHANGED" | grep -E '^daily/' | cut -d/ -f2 | sed 's/.*_//' | sort -u || true)
-          if [ -z "$BATCHES" ]; then echo "本次变更不涉及批次产物"; exit 0; fi
+          if [ -z "$BATCHES" ]; then echo "本次变更不涉及批次产物（infra-only PR）"; exit 0; fi
           for B in $BATCHES; do
             echo "===== 校验批次 $B ====="
             python gates/stage_gate.py "$B" verify
