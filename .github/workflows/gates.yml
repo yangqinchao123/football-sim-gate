@@ -54,8 +54,9 @@ jobs:
           fi
           # 不用 --depth=1：浅取会丢 merge-base，导致 diff 为空、闸门被静默跳过（D42 首轮即此故障）
           git fetch --no-tags origin "$BASE_SHA" || { echo "::error::无法取到 base sha"; exit 1; }
-          CHANGED=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA") || { echo "::error::git diff 失败，按失败处理"; exit 1; }
-          echo "变更文件数: $(echo "$CHANGED" | grep -c . || true)"
+          # core.quotePath=false：中文路径默认会被转义成 "daily/...\346\225..."，导致 ^daily/ 匹配不上（D42 第二轮故障）
+          CHANGED=$(git -c core.quotePath=false diff --name-only "$BASE_SHA"..."$HEAD_SHA") || { echo "::error::git diff 失败，按失败处理"; exit 1; }
+          echo "变更文件数: $(echo "$CHANGED" | grep -c . || true)"; echo "$CHANGED" | head -20
           BATCHES=$(echo "$CHANGED" | grep -E '^daily/' | cut -d/ -f2 | sed 's/.*_//' | sort -u || true)
           if [ -z "$BATCHES" ]; then echo "本次变更不涉及批次产物（infra-only PR）"; exit 0; fi
           for B in $BATCHES; do
