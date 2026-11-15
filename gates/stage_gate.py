@@ -456,7 +456,27 @@ def chk_S7(c):
     return True, "关1/关2 独立产物齐全，逐场 ≥2 轮真对质；producer/run_id/输入/概率四项独立性均成立"
 
 
+def _no_ticket(c):
+    """空仓豁免：0 票批次不该被 S8/S9/S10 逼着造票。
+    必须有 <batch>_no_ticket.json，写明 tickets=0 与非空理由，否则视为未声明。"""
+    p = os.path.join(WS, "%s_no_ticket.json" % c.batch)
+    if not os.path.exists(p):
+        return None
+    try:
+        o = json.load(open(p))
+    except Exception:
+        return None
+    if int(o.get("tickets", -1)) != 0:
+        return None
+    if not str(o.get("reason", "")).strip():
+        return None
+    return o
+
+
 def chk_S8(c):
+    nt = _no_ticket(c)
+    if nt:
+        return True, "N/A 空仓豁免（0 票，无需临场）：%s" % str(nt.get("reason"))[:40]
     live = os.path.join(WS, "g0%s_live_raw" % c.batch, "parsed.json")
     if not os.path.exists(live):
         return False, "缺临场 live SP（另存）"
@@ -467,6 +487,9 @@ def chk_S8(c):
 
 
 def chk_S9(c):
+    nt = _no_ticket(c)
+    if nt:
+        return True, "N/A 空仓豁免（0 票，无配单）：%s" % str(nt.get("reason"))[:40]
     p = os.path.join(WS, "%s_tickets.json" % c.batch)
     if not os.path.exists(p):
         return False, "缺配单文件"
@@ -490,6 +513,9 @@ def chk_S9(c):
 
 
 def chk_S10(c):
+    nt = _no_ticket(c)
+    if nt:
+        return True, "N/A 空仓豁免（0 票，无 LOCKED 单）"
     locked = glob.glob(c.f("*LOCKED*"))
     if not locked:
         return False, "缺 LOCKED 锁定单"
