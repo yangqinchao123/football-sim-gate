@@ -1,0 +1,17 @@
+{
+ "batch": "D42",
+ "dataset": "intl_data/results.csv",
+ "rows": 49940,
+ "last_match_date": "2026-10-06",
+ "business_date": "2026-11-15",
+ "gap_days": 40,
+ "threshold_days": 21,
+ "gap_triggered": true,
+ "remedy": {
+  "source": "UEFA 官方欧国联 2026/27 第1-5轮逐场赛果（A1/A3/C1/C2 共38场可确认比分）",
+  "artifact": "D42_recent_form.json",
+  "unknown_scores_unused": 2,
+  "note": "11-12 Armenia-Cyprus / San Marino-Belarus 未双源确认，标 unknown 不进 λ 样本"
+ },
+ "computed_at": "2026-11-15 21:3x +08:00"
+}

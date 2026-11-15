@@ -61,21 +61,7 @@ jobs:
           if [ -z "$BATCHES" ]; then echo "本次变更不涉及批次产物（infra-only PR）"; exit 0; fi
           for B in $BATCHES; do
             echo "===== 校验批次 $B ====="
-            GOAL=$(python3 - "$BASE_SHA" "$B" <<'PY'
-import json, subprocess, sys
-base, b = sys.argv[1], sys.argv[2]
-def idx(v):
-    try: return int(str(v).replace("S", ""))
-    except Exception: return -1
-def read(src):
-    try:
-        raw = subprocess.check_output(["git", "show", "%s:%s_goal.json" % (src, b)], stderr=subprocess.DEVNULL)
-        return idx(json.loads(raw).get("goal_stage", "S0"))
-    except Exception:
-        return -1
-print("S%d" % max(read(base), read("HEAD")))
-PY
-)
+            GOAL=$(python3 tools/goal_of.py "$BASE_SHA" "$B")
             echo "目标阶段 $GOAL（base/head 取高，防 PR 自行降标）"
             python3 gates/stage_gate.py "$B" verify --goal "$GOAL" || { echo "::error::批次 $B 未达到 $GOAL"; exit 1; }
           done
