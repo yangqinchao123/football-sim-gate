@@ -14,12 +14,17 @@
 """
 import json, os, sys, glob, re
 
-WS = os.path.dirname(os.path.abspath(__file__))
+# 产物在仓库根，不在 gates/ 内（此前指向 gates/ 导致根目录跑必 FileNotFoundError，闸门从未真正执行）
+WS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def main(batch):
     model = json.load(open(os.path.join(WS, f"{batch}_model_out.json")))
     g0 = json.load(open(os.path.join(WS, f"g0{batch}_parsed.json")))
-    fair = {r["num"][-3:]: r["had"].get("fair") for r in g0 if r.get("had")}
+    def _numkey(n):
+        m = re.search(r"(\d{3})$", str(n))
+        return m.group(1) if m else str(n)
+
+    fair = {_numkey(r["num"]): r["had"].get("fair") for r in g0 if r.get("had")}
 
     # 碰撞 final 不进票的场
     no_bet_clash = set()
@@ -58,7 +63,7 @@ def main(batch):
         if poi:
             if names[max(range(3), key=lambda i: poi[i])] != names[max(range(3), key=lambda i: dc[i])]:
                 reasons.append("N4 泊松与DC首选分裂")
-        f = fair.get(num)
+        f = fair.get(_numkey(num))
         if f:
             diff = abs(f["h"] - f["a"])
             if diff < 0.10:
@@ -73,8 +78,8 @@ def main(batch):
     bets = [n for n, v in result.items() if v["decision"] == "ELIGIBLE"]
     no = {n: v["reasons"] for n, v in result.items() if v["decision"] == "NO_BET"}
     print(f"批次 {batch}：可进票 {len(bets)} 场，空仓 {len(no)} 场")
-    print("可进票:", sorted(bets, key=int))
-    for n, r in sorted(no.items(), key=lambda x: int(x[0])):
+    print("可进票:", sorted(bets, key=lambda x: int(_numkey(x))))
+    for n, r in sorted(no.items(), key=lambda x: int(_numkey(x[0]))):
         print(f"  空仓 {n}: {r}")
     json.dump(result, open(os.path.join(WS, f"{batch}_no_bet.json"), "w"), ensure_ascii=False, indent=1)
 
