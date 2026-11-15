@@ -1,0 +1,12 @@
+{
+ "batch": "D42",
+ "reason": "探球新站 503（迁移期后端不可用）、旧站无登录态（JWT 约 1h 过期且 CDP target 仅 about:blank）",
+ "probed_at": "2026-11-15 20:36:00 +08:00",
+ "evidence": {
+  "new_site": {"url": "https://www.aizqyc.cn/matches", "http_code": 503},
+  "old_site": {"url": "https://fa888.coze.site/matches", "http_code": 200, "note": "返回 JS 壳页，匿名抓不到比赛数据"},
+  "cdp": {"endpoint": "http://127.0.0.1:9222/json/list", "targets": ["about:blank"]},
+  "env": {"TQ_PW": "未设置", ".secrets/tq_pw": "不存在"}
+ },
+ "policy": "按纪律不自行输密码试错、不空跑；改为公开多源（UEFA 官方 + 懂球帝前瞻 + 直播吧/新浪/搜狐/企鹅/球迷屋交叉），单源项一律不进票"
+}

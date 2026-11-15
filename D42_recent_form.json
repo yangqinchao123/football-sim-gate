@@ -1,0 +1,522 @@
+{
+ "source": "UEFA Nations League 2026/27 league phase results (uefa.com fixtures-by-team)",
+ "business_date": "2026-11-15",
+ "unknown_excluded": [
+  {
+   "date": "2026-11-12",
+   "home": "Armenia",
+   "away": "Cyprus",
+   "group": "C2",
+   "note": "比分未双源确认；仅确认打平（亚美尼亚 5分、塞浦路斯 8分对照积分榜）"
+  },
+  {
+   "date": "2026-11-12",
+   "home": "San Marino",
+   "away": "Belarus",
+   "group": "C1",
+   "note": "比分未确认"
+  }
+ ],
+ "groups": {
+  "A3": {
+   "group": "A3",
+   "n_matches": 10,
+   "avg_goals_per_team": 1.85,
+   "home_goals_avg": 1.6,
+   "away_goals_avg": 2.1,
+   "home_factor": 0.9324,
+   "away_factor": 1.0676,
+   "teams": {
+    "Czechia": {
+     "n": 5,
+     "gf": 2,
+     "ga": 12,
+     "attack": 0.6437,
+     "defense": 1.1351
+    },
+    "Croatia": {
+     "n": 5,
+     "gf": 5,
+     "ga": 16,
+     "attack": 0.7912,
+     "defense": 1.3317
+    },
+    "England": {
+     "n": 5,
+     "gf": 16,
+     "ga": 4,
+     "attack": 1.3317,
+     "defense": 0.742
+    },
+    "Spain": {
+     "n": 5,
+     "gf": 14,
+     "ga": 5,
+     "attack": 1.2334,
+     "defense": 0.7912
+    }
+   }
+  },
+  "A1": {
+   "group": "A1",
+   "n_matches": 10,
+   "avg_goals_per_team": 1.5,
+   "home_goals_avg": 1.6,
+   "away_goals_avg": 1.4,
+   "home_factor": 1.0333,
+   "away_factor": 0.9667,
+   "teams": {
+    "Italy": {
+     "n": 5,
+     "gf": 11,
+     "ga": 6,
+     "attack": 1.2121,
+     "defense": 0.9091
+    },
+    "Belgium": {
+     "n": 5,
+     "gf": 8,
+     "ga": 6,
+     "attack": 1.0303,
+     "defense": 0.9091
+    },
+    "Türkiye": {
+     "n": 5,
+     "gf": 3,
+     "ga": 13,
+     "attack": 0.7273,
+     "defense": 1.3333
+    },
+    "France": {
+     "n": 5,
+     "gf": 8,
+     "ga": 5,
+     "attack": 1.0303,
+     "defense": 0.8485
+    }
+   }
+  },
+  "C1": {
+   "group": "C1",
+   "n_matches": 9,
+   "avg_goals_per_team": 1.3889,
+   "home_goals_avg": 1.4444,
+   "away_goals_avg": 1.3333,
+   "home_factor": 1.02,
+   "away_factor": 0.98,
+   "teams": {
+    "Albania": {
+     "n": 5,
+     "gf": 10,
+     "ga": 3,
+     "attack": 1.2,
+     "defense": 0.7418
+    },
+    "Belarus": {
+     "n": 4,
+     "gf": 5,
+     "ga": 2,
+     "attack": 0.96,
+     "defense": 0.744
+    },
+    "San Marino": {
+     "n": 4,
+     "gf": 1,
+     "ga": 16,
+     "attack": 0.672,
+     "defense": 1.752
+    },
+    "Finland": {
+     "n": 5,
+     "gf": 9,
+     "ga": 4,
+     "attack": 1.1345,
+     "defense": 0.8073
+    }
+   }
+  },
+  "C2": {
+   "group": "C2",
+   "n_matches": 9,
+   "avg_goals_per_team": 1.1667,
+   "home_goals_avg": 1.4444,
+   "away_goals_avg": 0.8889,
+   "home_factor": 1.119,
+   "away_factor": 0.881,
+   "teams": {
+    "Armenia": {
+     "n": 4,
+     "gf": 4,
+     "ga": 5,
+     "attack": 0.9429,
+     "defense": 1.0286
+    },
+    "Latvia": {
+     "n": 5,
+     "gf": 3,
+     "ga": 8,
+     "attack": 0.7792,
+     "defense": 1.1688
+    },
+    "Montenegro": {
+     "n": 5,
+     "gf": 9,
+     "ga": 5,
+     "attack": 1.2468,
+     "defense": 0.9351
+    },
+    "Cyprus": {
+     "n": 4,
+     "gf": 5,
+     "ga": 3,
+     "attack": 1.0286,
+     "defense": 0.8571
+    }
+   }
+  }
+ },
+ "fixtures": {
+  "周日006": {
+   "num": "周日006",
+   "home": "Latvia",
+   "away": "Armenia",
+   "group": "C2",
+   "line": 1,
+   "lambda_home": 1.0464,
+   "lambda_away": 1.1328,
+   "hda": {
+    "h": 0.3319,
+    "d": 0.2926,
+    "a": 0.3755
+   },
+   "handicap": {
+    "让胜": 0.6245,
+    "让平": 0.2207,
+    "让负": 0.1548
+   },
+   "top_scores": [
+    {
+     "score": "1-1",
+     "p": 0.1341
+    },
+    {
+     "score": "0-1",
+     "p": 0.1282
+    },
+    {
+     "score": "1-0",
+     "p": 0.1184
+    },
+    {
+     "score": "0-0",
+     "p": 0.1131
+    },
+    {
+     "score": "1-2",
+     "p": 0.076
+    }
+   ],
+   "sample": {
+    "home": {
+     "n": 5,
+     "gf": 3,
+     "ga": 8,
+     "attack": 0.7792,
+     "defense": 1.1688
+    },
+    "away": {
+     "n": 4,
+     "gf": 4,
+     "ga": 5,
+     "attack": 0.9429,
+     "defense": 1.0286
+    }
+   }
+  },
+  "周日007": {
+   "num": "周日007",
+   "home": "Cyprus",
+   "away": "Montenegro",
+   "group": "C2",
+   "line": 1,
+   "lambda_home": 1.2557,
+   "lambda_away": 1.0984,
+   "hda": {
+    "h": 0.3991,
+    "d": 0.2787,
+    "a": 0.3222
+   },
+   "handicap": {
+    "让胜": 0.6778,
+    "让平": 0.1948,
+    "让负": 0.1274
+   },
+   "top_scores": [
+    {
+     "score": "1-1",
+     "p": 0.131
+    },
+    {
+     "score": "1-0",
+     "p": 0.1193
+    },
+    {
+     "score": "0-1",
+     "p": 0.1043
+    },
+    {
+     "score": "0-0",
+     "p": 0.095
+    },
+    {
+     "score": "2-1",
+     "p": 0.0822
+    }
+   ],
+   "sample": {
+    "home": {
+     "n": 4,
+     "gf": 5,
+     "ga": 3,
+     "attack": 1.0286,
+     "defense": 0.8571
+    },
+    "away": {
+     "n": 5,
+     "gf": 9,
+     "ga": 5,
+     "attack": 1.2468,
+     "defense": 0.9351
+    }
+   }
+  },
+  "周日008": {
+   "num": "周日008",
+   "home": "Finland",
+   "away": "San Marino",
+   "group": "C1",
+   "line": -4,
+   "lambda_home": 2.8159,
+   "lambda_away": 0.7384,
+   "hda": {
+    "h": 0.802,
+    "d": 0.1271,
+    "a": 0.0707
+   },
+   "handicap": {
+    "让胜": 0.1008,
+    "让平": 0.1121,
+    "让负": 0.787
+   },
+   "top_scores": [
+    {
+     "score": "2-0",
+     "p": 0.1134
+    },
+    {
+     "score": "3-0",
+     "p": 0.1064
+    },
+    {
+     "score": "2-1",
+     "p": 0.0837
+    },
+    {
+     "score": "1-0",
+     "p": 0.0805
+    },
+    {
+     "score": "3-1",
+     "p": 0.0786
+    }
+   ],
+   "sample": {
+    "home": {
+     "n": 5,
+     "gf": 9,
+     "ga": 4,
+     "attack": 1.1345,
+     "defense": 0.8073
+    },
+    "away": {
+     "n": 4,
+     "gf": 1,
+     "ga": 16,
+     "attack": 0.672,
+     "defense": 1.752
+    }
+   }
+  },
+  "周日009": {
+   "num": "周日009",
+   "home": "Croatia",
+   "away": "Czechia",
+   "group": "A3",
+   "line": -1,
+   "lambda_home": 1.5492,
+   "lambda_away": 1.6931,
+   "hda": {
+    "h": 0.3535,
+    "d": 0.2319,
+    "a": 0.4146
+   },
+   "handicap": {
+    "让胜": 0.1702,
+    "让平": 0.1833,
+    "让负": 0.6465
+   },
+   "top_scores": [
+    {
+     "score": "1-1",
+     "p": 0.1025
+    },
+    {
+     "score": "1-2",
+     "p": 0.0868
+    },
+    {
+     "score": "2-1",
+     "p": 0.0794
+    },
+    {
+     "score": "2-2",
+     "p": 0.0672
+    },
+    {
+     "score": "0-1",
+     "p": 0.0662
+    }
+   ],
+   "sample": {
+    "home": {
+     "n": 5,
+     "gf": 5,
+     "ga": 16,
+     "attack": 0.7912,
+     "defense": 1.3317
+    },
+    "away": {
+     "n": 5,
+     "gf": 2,
+     "ga": 12,
+     "attack": 0.6437,
+     "defense": 1.1351
+    }
+   }
+  },
+  "周日010": {
+   "num": "周日010",
+   "home": "Spain",
+   "away": "England",
+   "group": "A3",
+   "line": -1,
+   "lambda_home": 1.5786,
+   "lambda_away": 2.081,
+   "hda": {
+    "h": 0.2944,
+    "d": 0.2111,
+    "a": 0.4945
+   },
+   "handicap": {
+    "让胜": 0.1386,
+    "让平": 0.1558,
+    "让负": 0.7056
+   },
+   "top_scores": [
+    {
+     "score": "1-2",
+     "p": 0.088
+    },
+    {
+     "score": "1-1",
+     "p": 0.0846
+    },
+    {
+     "score": "2-2",
+     "p": 0.0695
+    },
+    {
+     "score": "2-1",
+     "p": 0.0667
+    },
+    {
+     "score": "1-3",
+     "p": 0.061
+    }
+   ],
+   "sample": {
+    "home": {
+     "n": 5,
+     "gf": 14,
+     "ga": 5,
+     "attack": 1.2334,
+     "defense": 0.7912
+    },
+    "away": {
+     "n": 5,
+     "gf": 16,
+     "ga": 4,
+     "attack": 1.3317,
+     "defense": 0.742
+    }
+   }
+  },
+  "周日011": {
+   "num": "周日011",
+   "home": "Belgium",
+   "away": "Italy",
+   "group": "A1",
+   "line": -1,
+   "lambda_home": 1.4518,
+   "lambda_away": 1.5978,
+   "hda": {
+    "h": 0.3481,
+    "d": 0.2401,
+    "a": 0.4118
+   },
+   "handicap": {
+    "让胜": 0.162,
+    "让平": 0.1861,
+    "让负": 0.6519
+   },
+   "top_scores": [
+    {
+     "score": "1-1",
+     "p": 0.1099
+    },
+    {
+     "score": "1-2",
+     "p": 0.0878
+    },
+    {
+     "score": "2-1",
+     "p": 0.0798
+    },
+    {
+     "score": "0-1",
+     "p": 0.0757
+    },
+    {
+     "score": "1-0",
+     "p": 0.0688
+    }
+   ],
+   "sample": {
+    "home": {
+     "n": 5,
+     "gf": 8,
+     "ga": 6,
+     "attack": 1.0303,
+     "defense": 0.9091
+    },
+    "away": {
+     "n": 5,
+     "gf": 11,
+     "ga": 6,
+     "attack": 1.2121,
+     "defense": 0.9091
+    }
+   }
+  }
+ }
+}
