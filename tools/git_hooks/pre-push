@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# pre-push 本地硬门禁（免费，不依赖 GitHub Pro）
+# 推送前强制：脚本编译、泄密检查、闸门冒烟。任一不过即拒绝推送。
+# 安装：bash tools/git_hooks/install_hooks.sh
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "[pre-push] 1/3 脚本编译检查"
+python3 -m py_compile gates/*.py lib/*.py
+
+echo "[pre-push] 2/3 泄密检查"
+if grep -rInE "(TQ_PW=|password\s*=|BEGIN .*PRIVATE KEY)" gates lib framework 2>/dev/null; then
+  echo "[pre-push] 检测到疑似密钥/密码，拒绝推送" >&2
+  exit 1
+fi
+
+echo "[pre-push] 3/3 闸门冒烟测试"
+python3 gates/smoke_test.py
+
+echo "[pre-push] 全部本地门禁通过，允许推送"
