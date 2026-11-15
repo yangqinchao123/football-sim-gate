@@ -1,0 +1,7 @@
+{
+ "batch": "D42",
+ "min_tq": 8,
+ "legs": [],
+ "min_picks": 1,
+ "note": "legs 暂为空：截至 S5 无腿通过碰撞；若 S7 产出候选腿，在 S7 PR 中更新本文件并补 GRC"
+}
