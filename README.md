@@ -10,15 +10,34 @@
 - `daily/`：每日产物（按业务日建子目录）
 - `data/`：数据占位（大数据不入库，按需脚本拉取）
 
-## 双层门禁（已生效）
-1. **本地 pre-push 硬门**（`tools/git_hooks/`，安装：`bash tools/git_hooks/install_hooks.sh`）：
-   每次推送前强制跑 脚本编译 → 泄密检查 → 闸门冒烟，任一不过直接拒绝推送。
-2. **云端 CI**（`.github/workflows/gates.yml`）：推送到 main 自动跑同样的检查，结果留痕、红叉可见。
+## 三道门禁（2026-11-15 起全部落地）
+1. **服务端分支保护（强制点，绕不过）**：
+   `required_pull_request_reviews`（PR 强制，0 审批）+ `required_status_checks: gates`（strict）
+   + `enforce_admins: true` + 禁强推禁删。
+   实测：直推 main 被服务端拒绝 ——
+   `GH006: Protected branch update failed ... Changes must be made through a pull request`。
+   **所以"建分支 → PR → CI 绿 → 合并"现在由服务端保证，不再靠自觉。**
+2. **云端 CI 真判定**（`.github/workflows/gates.yml`）：
+   除编译/泄密/冒烟外，新增 `Stage gate verify`：对本次变更涉及的每个批次，重算 S0..goal 全部阶段，
+   任一 BLOCK 即红叉不可合并；同时检测"手标 PASS"（状态文件写 pass 但复算不过 → 直接失败）。
+3. **本地 pre-push 硬门**（`tools/git_hooks/`，安装：`bash tools/git_hooks/install_hooks.sh`）：
+   推送前跑编译 → 泄密检查 → 冒烟，任一不过拒绝推送（本地层，可绕，仅作加速反馈）。
 
-## 平台限制与可选升级
-- 免费账号的**私有仓库**不支持服务端分支保护/规则集（需 GitHub Pro），因此服务端"无法强推"暂时做不到，
-  当前靠本地 pre-push 钩子 + 云端 CI 双保险，强制留痕。
-- 若要服务端真正禁止绕过：升级 GitHub Pro，或将仓库改为公开（公开仓库分支保护免费）。此决策需 owner 拍板。
+## 批次配置（门禁必须对任意批次成立）
+每个批次在仓库根放一个 `<batch>_config.json` 与 `<batch>_goal.json`：
+```json
+// D42_config.json
+{"min_tq": 8, "legs": ["008", "010"], "min_picks": 1}
+// D42_goal.json
+{"goal_stage": "S6"}
+```
+- `legs`：本批真实进票腿（空数组时必须同时提交 `<batch>_无进票腿声明.md`，禁止静默空手过闸）。
+- `goal_stage`：本批 PR 计划走到哪一阶段；CI 只校验到该阶段，避免"当天还没结算就永远红叉"。
+- 历史版本的 `stage_gate.py` 把 `005/011/012/013/017/022/026/027` 与 `≥20 场` 写死在检查器里，
+  导致任何新批次都 PASS 不了（等于闸门没生效），已改为配置驱动。
+
+## 平台限制
+- 私有免费仓库不支持服务端分支保护；本仓库为**公开**，故保护免费可用，已开启。
 
 ## 纪律
 - 密码/密钥禁止入库，CI 与本地钩子都会拦截；探球密码只走环境变量 TQ_PW。
