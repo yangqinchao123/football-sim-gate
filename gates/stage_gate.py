@@ -156,6 +156,16 @@ def chk_S3(c):
     return True, "penaltyblog 建模 %d 场（其余 null 已标注）" % len(modeled)
 
 
+def _find_card(c, num, kind):
+    """事实卡片/伤停结果定位：兼容 005 与 周日005 两种编号写法。"""
+    for cand in ("%s_%s_%s.json" % (c.batch, kind, num),
+                 "%s_%s_%s.json" % (c.batch, kind, str(num)[-3:])):
+        p = os.path.join(WS, cand)
+        if os.path.exists(p):
+            return p
+    return None
+
+
 def chk_S4(c):
     """进票腿由批次配置声明；无腿必须显式声明，禁止用"没有腿"静默绕过颗粒度检查。"""
     cfg = c.cfg()
@@ -181,7 +191,35 @@ def chk_S4(c):
                 return False, "场%s GRC 缺【%s】" % (n, tg)
         if "裁判" not in blk:
             return False, "场%s 缺裁判项" % n
-    return True, "%d 条进票腿 GRC 颗粒度齐全" % len(legs)
+
+        # 事实层：数字必须脚本直出并被 GRC 引用，禁止手写（治"具体但错"）
+        fact = _find_card(c, n, "fact")
+        if not fact:
+            return False, "场%s 缺事实卡片 %s_fact_%s.json（数字不得手写）" % (n, c.batch, n)
+        card = json.load(open(fact))
+        for k in ("league", "standings", "form", "source"):
+            if not card.get(k):
+                return False, "场%s 事实卡片缺字段 %s" % (n, k)
+        st, teams = card.get("standings") or {}, (card.get("home"), card.get("away"))
+        if len([t for t in teams if t and st.get(t)]) < 2:
+            return False, "场%s 事实卡片缺双方积分榜数据" % n
+        if os.path.basename(fact) not in blk:
+            return False, "场%s GRC 未引用事实卡片 %s" % (n, os.path.basename(fact))
+
+        # 伤停层：必须双源比对结果，冲突未解决不许进票
+        inj = _find_card(c, n, "injury")
+        if not inj:
+            return False, "场%s 缺伤停双源结果 %s_injury_%s.json" % (n, c.batch, n)
+        ij = json.load(open(inj))
+        if not ij.get("collected_at"):
+            return False, "场%s 伤停核查缺 collected_at（防过期信息当现状）" % n
+        if not isinstance(ij.get("confirmed"), list) or not isinstance(ij.get("unconfirmed"), list):
+            return False, "场%s 伤停核查须分 confirmed/unconfirmed 两名单" % n
+        if ij.get("status_conflict"):
+            return False, "场%s 伤停双源状态冲突未解决：%s" % (n, ij["status_conflict"])
+        if os.path.basename(inj) not in blk:
+            return False, "场%s GRC 未引用伤停核查结果 %s" % (n, os.path.basename(inj))
+    return True, "%d 条进票腿 GRC 颗粒度齐全，事实卡片与伤停双源已引用" % len(legs)
 
 
 def chk_S5(c):
