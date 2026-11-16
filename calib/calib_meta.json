@@ -1,0 +1,12 @@
+{
+ "_meta": {
+  "method": "identity（原 isotonic 表冻结）",
+  "fitted_on": "n/a",
+  "status": "frozen_identity",
+  "effect": "2627 赛季 536 场样本外：不做校准 RPS 0.2068 / 融合口径 0.1966；isotonic、beta、Platt 与不校准差异均 ≤0.0006，落在噪声内",
+  "why": "2526 训练 2259 场中，P(D)<0.22 全部区段样本 <300（合计 555 场），低端 0→0.15 的阶跃由约 140 场支撑，属不可证实的调整",
+  "restore_rule": "需 ≥2 个独立赛季、每个区段 ≥300 场，且样本外 RPS 改善显著（>2 个标准误）才恢复校准",
+  "support_file": "calib/支撑度_2526.json",
+  "evidence_script": "research/calib_compare.py"
+ }
+}

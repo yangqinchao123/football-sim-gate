@@ -51,6 +51,12 @@ ROI／注码／余额不参与过关判定；为提高准确率而增加的可�
 - `S6`：方向与融合基准不一致，按改序处理，必须 evidence/falsifiable/replacement，缺一 BLOCK。
 - 详见 `framework/外部对照_模型与收盘市场_20261116.md`；实验脚本 `research/blend_eval.py`。
 
+## 平局校准：已冻结为不校准
+- 2526 训练 2259 场：P(D)<0.22 每段样本均 <300，低端阶跃靠百来场撑着。
+- 2627 验证 536 场：isotonic / beta / Platt / 不校准，RPS 差异 ≤0.0006，属噪声。
+- 现表为恒等映射（value=key），`calib/calib_meta.json` 记恢复条件；`lib/calib_check.py` 拦截"支撑不足却大幅调值"。
+- 详见 `framework/校准表结论_20261116_支撑度.md`。
+
 ## 准确率怎么看
 - `ledger/direction_ledger.jsonl` 是命中率唯一数据源；`tools/ledger.py stats` 同时给"锁定方向/模型最高项/市场最高项"三栏与 RPS。
 - 只有 `counted=true`（预测赛前锁定）的批次进样本；D42 因无锁定被排除，其命中率不作成绩、也不作"已修好"的证据。
