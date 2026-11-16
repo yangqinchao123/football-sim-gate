@@ -1,0 +1,7 @@
+{
+ "_note": "不计入准确率样本的批次；每条必须有 reason，且不得作为'已修复'的依据",
+ "D42": {
+  "reason": "合并时无预测锁定机制（无 _meta.locked_at），方向未在开赛前固定，命中率不可核",
+  "rule": "GRANDFATHER_PRED_LOCK"
+ }
+}

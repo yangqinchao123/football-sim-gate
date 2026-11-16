@@ -1,0 +1,97 @@
+{
+ "schema": "settlement/1",
+ "source": "local html: /tmp/jczq_1115.html",
+ "observed_at": "2026-11-16 10:22:23 +0800",
+ "date": "2026-11-15",
+ "ended": true,
+ "nums": {
+  "周日001": {
+   "score": "1:1",
+   "teams": [
+    "町田泽维",
+    "神户胜利"
+   ],
+   "ended": true
+  },
+  "周日002": {
+   "score": "3:2",
+   "teams": [
+    "鹿岛鹿角",
+    "横滨水手"
+   ],
+   "ended": true
+  },
+  "周日003": {
+   "score": "1:1",
+   "teams": [
+    "大阪樱花",
+    "浦和红钻"
+   ],
+   "ended": true
+  },
+  "周日004": {
+   "score": "5:4",
+   "teams": [
+    "柏太阳神",
+    "川崎前锋"
+   ],
+   "ended": true
+  },
+  "周日005": {
+   "score": "2:1",
+   "teams": [
+    "马斯特里",
+    "维迪斯"
+   ],
+   "ended": true
+  },
+  "周日006": {
+   "score": "0:0",
+   "teams": [
+    "拉脱维亚",
+    "亚美尼亚"
+   ],
+   "ended": true
+  },
+  "周日007": {
+   "score": "1:4",
+   "teams": [
+    "塞浦路斯",
+    "黑山"
+   ],
+   "ended": true
+  },
+  "周日008": {
+   "score": "7:2",
+   "teams": [
+    "芬兰",
+    "圣马力诺"
+   ],
+   "ended": true
+  },
+  "周日009": {
+   "score": "2:1",
+   "teams": [
+    "克罗地亚",
+    "捷克"
+   ],
+   "ended": true
+  },
+  "周日010": {
+   "score": "2:3",
+   "teams": [
+    "西班牙",
+    "英格兰"
+   ],
+   "ended": true
+  },
+  "周日011": {
+   "score": "4:1",
+   "teams": [
+    "比利时",
+    "意大利"
+   ],
+   "ended": true
+  }
+ }
+}

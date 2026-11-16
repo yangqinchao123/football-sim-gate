@@ -197,6 +197,46 @@ case("S6 owner 改序三要素齐全 → PASS", True, "S6",
                                     "replacement": "替补边路改三中卫"}))
 
 
+# ---------- S11 五案：赛果与台账 ----------
+def s11_fixtures(root, drop_num=None, ledger=True, tamper=False, no_market=False):
+    lock(root, picks(reject_ok=True))          # 锁定方向 001=A 002=H 003=H
+    nums = {"周日001": {"score": "0:2", "teams": ["甲", "乙"], "ended": True},
+            "周日002": {"score": "1:1", "teams": ["丙", "丁"], "ended": True},
+            "周日003": {"score": "2:0", "teams": ["戊", "己"], "ended": True}}
+    if drop_num:
+        nums.pop(drop_num, None)
+    w(os.path.join(root, "%s_settlement.json" % BATCH),
+      {"schema": "settlement/1", "source": "unit", "observed_at": "2026-01-02 08:00", "nums": nums})
+    w(os.path.join(root, "daily", DAY, "D99_settlement.md"), {"note": "结算单"})
+    w(os.path.join(root, "%s_owner方向确认.json" % BATCH),
+      {"batch": BATCH, "confirmed": True, "approved_nums": ["周日001", "周日002", "周日003"],
+       "directions": {"周日001": {"dir": "A"}, "周日002": {"dir": "H"}, "周日003": {"dir": "H"}},
+       "ts": "2026-01-01 12:00"})
+    if not ledger:
+        return
+    rows = []
+    for num, s in nums.items():
+        res = sg._score_result(s["score"])
+        d = {"周日001": "A", "周日002": "H", "周日003": "H"}[num]
+        hit = (d == res)
+        if tamper and num == "周日002":
+            hit = True                        # 002 实为平，写成命中
+        rows.append({"batch": BATCH, "num": num, "dir": d, "result": res, "score": s["score"],
+                     "hit": hit, "counted": True,
+                     "market": None if no_market else {"h": 0.4, "d": 0.3, "a": 0.3}})
+    os.makedirs(os.path.join(root, "ledger"), exist_ok=True)
+    with open(os.path.join(root, "ledger", "direction_ledger.jsonl"), "w") as f:
+        for r in rows:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+
+case("S11 合法：逐场赛果+台账齐全 → PASS", True, "S11", lambda r: s11_fixtures(r))
+case("S11 赛果少一场 → BLOCK", False, "S11", lambda r: s11_fixtures(r, drop_num="周日003"))
+case("S11 无台账 → BLOCK", False, "S11", lambda r: s11_fixtures(r, ledger=False))
+case("S11 台账 hit 被写成命中 → BLOCK", False, "S11", lambda r: s11_fixtures(r, tamper=True))
+case("S11 计入样本却缺市场概率 → BLOCK", False, "S11", lambda r: s11_fixtures(r, no_market=True))
+
+
 def main():
     fails = 0
     for name, expect_pass, stage, mutate in CASES:
