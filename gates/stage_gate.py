@@ -33,7 +33,8 @@ WS = os.environ.get("GATE_WS") or (
 ROOT = WS
 
 # ---- v3.2.1 门禁对齐：只豁免规则落地前已合并的历史批次，新批次一律适用 ----
-GRANDFATHER_PRED_LOCK = {"D42"}      # D42 合并时无预测锁定机制；其命中率不得计入准确率样本
+GRANDFATHER_PRED_LOCK = {"D42"}
+GRANDFATHER_BLEND = {"D42"}   # 融合基准规则落地前的历史批次，不得作为样本      # D42 合并时无预测锁定机制；其命中率不得计入准确率样本
 GRANDFATHER_S5_EVIDENCE = {"D42"}    # D42 合并时无「空仓场须有闸门实跑依据」要求
 
 
@@ -323,6 +324,20 @@ def chk_S6(c):
                 if miss:
                     return False, "场%s owner 方向 %s ≠ 模型最高项 %s，改序记录缺 %s" % (
                         num, d, arg, "/".join(miss))
+        # 融合概率（模型+收盘市场）是方向基准：与它分歧，同样要三要素举证
+        bl_path = os.path.join(WS, "%s_blend.json" % c.batch)
+        if os.path.exists(bl_path) and c.batch not in GRANDFATHER_BLEND:
+            bl = json.load(open(bl_path))
+            for num in o.get("approved_nums", []):
+                d = str((dirs.get(num) or {}).get("dir", "")).strip().upper()[:1]
+                b = (bl.get(num) or {}).get("dir")
+                if not d or not b or d == b:
+                    continue
+                ov = (o.get("overrides") or {}).get(num) or {}
+                miss = [k for k in ("evidence", "falsifiable", "replacement") if not ov.get(k)]
+                if miss:
+                    return False, "场%s 方向 %s ≠ 融合基准 %s（模型+市场共识），举证缺 %s" % (
+                        num, d, b, "/".join(miss))
     return True, "owner 已确认 %d 场方向（%s），方向与模型一致或已附改序记录" % (n, o.get("ts"))
 
 

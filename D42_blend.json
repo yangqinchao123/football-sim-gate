@@ -1,0 +1,77 @@
+{
+ "周日006": {
+  "p": [
+   0.2744,
+   0.2865,
+   0.4391
+  ],
+  "dir": "A",
+  "model_dir": "A",
+  "market_dir": "A",
+  "diverged": false
+ },
+ "周日007": {
+  "p": [
+   0.2992,
+   0.2566,
+   0.4443
+  ],
+  "dir": "A",
+  "model_dir": "H",
+  "market_dir": "A",
+  "diverged": true
+ },
+ "周日009": {
+  "p": [
+   0.6314,
+   0.2114,
+   0.1572
+  ],
+  "dir": "H",
+  "model_dir": "H",
+  "market_dir": "H",
+  "diverged": false
+ },
+ "周日010": {
+  "p": [
+   0.5061,
+   0.2562,
+   0.2377
+  ],
+  "dir": "H",
+  "model_dir": "H",
+  "market_dir": "H",
+  "diverged": false
+ },
+ "周日011": {
+  "p": [
+   0.4312,
+   0.26,
+   0.3088
+  ],
+  "dir": "H",
+  "model_dir": "H",
+  "market_dir": "H",
+  "diverged": false
+ },
+ "周日005": {
+  "p": [
+   0.2954,
+   0.2659,
+   0.4387
+  ],
+  "dir": "A",
+  "model_dir": null,
+  "market_dir": "A",
+  "diverged": false
+ },
+ "_meta": {
+  "w_model": 0.3,
+  "source": "pb_dc + market_fair(devig)",
+  "created_at": "2026-11-16 10:39:33 +0800",
+  "missing_market": [
+   "周日008 无市场概率"
+  ],
+  "rule": "方向默认取 dir；model_dir 与 dir 不同即为与融合分歧，须举证"
+ }
+}

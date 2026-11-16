@@ -178,9 +178,9 @@ case("S4 事实卡片+伤停双源+GRC 引用 → PASS", True, "S4", lambda r: s
 
 
 # ---------- S6 改序三案 ----------
-def s6_fixtures(root, dir_="A", override=None):
+def s6_fixtures(root, dir_="A", override=None, blend_dir=None, model_dir_a=False):
     w(os.path.join(root, "%s_model_out.json" % BATCH), {
-        "周日001": {"pb_dc": [0.52, 0.27, 0.21]},
+        "周日001": {"pb_dc": ([0.28, 0.30, 0.42] if model_dir_a else [0.52, 0.27, 0.21])},
         "周日002": {"pb_dc": [0.45, 0.30, 0.25]},
         "周日003": {"pb_dc": [0.46, 0.28, 0.26]}})
     o = {"batch": BATCH, "confirmed": True, "approved_nums": ["周日001"],
@@ -188,6 +188,9 @@ def s6_fixtures(root, dir_="A", override=None):
     if override:
         o["overrides"] = {"周日001": override}
     w(os.path.join(root, "daily", DAY, "%s_owner方向确认.json" % BATCH), o)
+    if blend_dir:
+        w(os.path.join(root, "%s_blend.json" % BATCH),
+          {"_meta": {"w_model": 0.3}, "周日001": {"p": [0.3, 0.3, 0.4], "dir": blend_dir}})
 
 
 case("S6 owner 方向=模型最高项 → PASS", True, "S6", lambda r: s6_fixtures(r, "H"))
@@ -235,6 +238,14 @@ case("S11 赛果少一场 → BLOCK", False, "S11", lambda r: s11_fixtures(r, dr
 case("S11 无台账 → BLOCK", False, "S11", lambda r: s11_fixtures(r, ledger=False))
 case("S11 台账 hit 被写成命中 → BLOCK", False, "S11", lambda r: s11_fixtures(r, tamper=True))
 case("S11 计入样本却缺市场概率 → BLOCK", False, "S11", lambda r: s11_fixtures(r, no_market=True))
+
+case("S6 方向≠融合基准且无举证 → BLOCK", False, "S6",
+     lambda r: s6_fixtures(r, "A", model_dir_a=True, blend_dir="H"))
+case("S6 方向≠融合基准但三要素齐全 → PASS", True, "S6",
+     lambda r: s6_fixtures(r, "A", model_dir_a=True, blend_dir="H",
+                           override={"evidence": "对手中卫停赛，替代者头球争顶成功率 38%",
+                                     "falsifiable": "若该中卫首发则本判断作废",
+                                     "replacement": "替补改三中卫，边路传中占比提升"}))
 
 
 def main():
