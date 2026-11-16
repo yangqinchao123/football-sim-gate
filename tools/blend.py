@@ -10,7 +10,7 @@ blend.py — 生成"模型+收盘市场"的融合概率（方向决策的基准�
 结论：方向默认用融合概率定，纯模型只在"跟融合分歧"时作为增量信号，且必须举证。
 
 用法：
-  python3 tools/blend.py D43            # 默认 w=0.30
+  python3 tools/blend.py D43            # 默认 w=0：样本外纯市场 RPS 最优，模型仅作分歧提示
   python3 tools/blend.py D43 --w 0.4
 输出：<batch>_blend.json
   {"_meta": {"w_model":0.3,"source":"pb_dc+market_fair","created_at":...},
@@ -23,7 +23,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_W = 0.30
+DEFAULT_W = 0.0
 
 
 def main():
