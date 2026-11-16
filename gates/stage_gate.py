@@ -31,6 +31,11 @@ WS = os.environ.get("GATE_WS") or (
     os.path.dirname(_HERE) if os.path.basename(_HERE) == "gates" else _HERE
 )  # 同一份脚本可在 仓库根/gates 与 工作目录根 两处运行，判定口径不分叉
 ROOT = WS
+sys.path.insert(0, os.path.join(WS, "lib"))
+try:
+    import fact_rules
+except Exception as _e:  # 缺库即视为环境问题，后续 S4 会明确报缺
+    fact_rules = None
 
 # ---- v3.2.1 门禁对齐：只豁免规则落地前已合并的历史批次，新批次一律适用 ----
 GRANDFATHER_PRED_LOCK = {"D42"}
@@ -209,6 +214,18 @@ def chk_S4(c):
             return False, "场%s 事实卡片缺双方积分榜数据" % n
         if os.path.basename(fact) not in blk:
             return False, "场%s GRC 未引用事实卡片 %s" % (n, os.path.basename(fact))
+        # 数字自证：整表不变量 + 源 CSV 溯源复算（不能只有两行"看起来对"的数字）
+        if fact_rules is None:
+            return False, "缺 lib/fact_rules.py，事实层无法校验"
+        ddir = None
+        for cand in (os.path.join(WS, "football_data"), os.path.join(WS, "lib", "football_data"),
+                     os.path.join(os.path.dirname(WS), "football_data")):
+            if os.path.isdir(cand):
+                ddir = cand
+                break
+        errs = fact_rules.check(card, ddir)
+        if errs:
+            return False, "场%s 事实卡片校验失败：%s" % (n, errs[0])
 
         # 伤停层：必须双源比对结果，冲突未解决不许进票
         inj = _find_card(c, n, "injury")
@@ -349,7 +366,13 @@ def _s7_items(d):
     for k in ("items", "clashes", "records"):
         if isinstance(d.get(k), list) and d[k]:
             return d[k], agent
-    cand = [v for k, v in d.items() if not str(k).startswith("_") and isinstance(v, dict)]
+    reserved = {"provenance", "independence", "meta"}
+    cand = []
+    for k, v in d.items():
+        if str(k).startswith("_") or str(k) in reserved or not isinstance(v, dict):
+            continue
+        v.setdefault("num", k)   # 字典形态下编号就是键，补回去才能与另一份对齐
+        cand.append(v)
     return cand, agent
 
 
@@ -383,7 +406,54 @@ def chk_S7(c):
                 return False, "场%s 对质 %d 轮 <2（agrees 也须真对抗两轮）" % (label, rounds)
             if len(rkeys) < 2:
                 return False, "场%s 实际只落 %d 轮记录（需 round1/round2）" % (label, len(rkeys))
-    return True, "关1/关2 独立产物齐全，逐场 ≥2 轮真对质"
+
+    # 独立性：署名可以编，运行痕迹不能编
+    load = {}
+    for p in (g1, g2):
+        d = json.load(open(p))
+        items, _ = _s7_items(d)
+        prov = d.get("provenance") or {}
+        for k in ("producer", "run_id", "started_at", "finished_at"):
+            if not prov.get(k):
+                return False, "%s 缺 provenance.%s（无法证明是独立运行的产物）" % (
+                    os.path.relpath(p, WS), k)
+        ind = d.get("independence") or {}
+        inputs = ind.get("inputs") or []
+        if not inputs:
+            return False, "%s 未登记 independence.inputs（无法判断是否读过对方产物）" % os.path.relpath(p, WS)
+        out_sha = str(prov.get("output_sha256") or d.get("output_sha256") or "")
+        if not out_sha:
+            return False, "%s 缺 output_sha256（无法判断对方是否读过自己的产物）" % os.path.relpath(p, WS)
+        load[os.path.basename(p)] = {"prov": prov, "items": items, "out": out_sha,
+                                     "shas": {str(i.get("sha256")) for i in inputs if i.get("sha256")}}
+
+    a, b = load["clash_record.json"], load["clash_record_g2.json"]
+    if a["prov"]["producer"] == b["prov"]["producer"]:
+        return False, "两份产物 producer 相同（%s）：同一来源不算独立碰撞" % a["prov"]["producer"]
+    if a["prov"]["run_id"] == b["prov"]["run_id"]:
+        return False, "两份产物 run_id 相同（%s）：同一次运行拆成两个文件不算独立" % a["prov"]["run_id"]
+    # 共享原始数据（早盘 SP、赛程）是允许的；读到对方的产物则独立性不成立
+    if b["out"] in a["shas"] or a["out"] in b["shas"]:
+        return False, "一方输入里含另一方的产物哈希：交叉读取，独立性不成立"
+
+    # 概率层面：两个独立模型不可能逐场给出几乎相同的概率，若相同即照搬
+    def nkey(x):
+        return re.sub(r"\D", "", str(x)) or str(x)
+
+    common, maxdiff = 0, 0.0
+    for num in {nkey(i.get("num") or i.get("id")) for i in a["items"]} & {
+            nkey(i.get("num") or i.get("id")) for i in b["items"]}:
+        pa = next((i.get("probs") for i in a["items"] if nkey(i.get("num") or i.get("id")) == num), None)
+        pb = next((i.get("probs") for i in b["items"] if nkey(i.get("num") or i.get("id")) == num), None)
+        if not (isinstance(pa, list) and isinstance(pb, list) and len(pa) == len(pb) == 3):
+            return False, "场%s 缺自建概率 probs[h,d,a]（没有自己的模型，就谈不上独立）" % num
+        common += 1
+        maxdiff = max(maxdiff, max(abs(float(pa[k]) - float(pb[k])) for k in range(3)))
+    if common == 0:
+        return False, "两份产物没有可比对的同场次记录"
+    if maxdiff <= 0.005:
+        return False, "两份产物逐场概率几乎完全相同（最大差 %.4f）：这是复制，不是两次独立建模" % maxdiff
+    return True, "关1/关2 独立产物齐全，逐场 ≥2 轮真对质；producer/run_id/输入/概率四项独立性均成立"
 
 
 def chk_S8(c):

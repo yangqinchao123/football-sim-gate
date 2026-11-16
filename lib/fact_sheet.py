@@ -9,8 +9,21 @@
 """
 import csv, json, os, sys
 
+def data_dir():
+    here = os.path.dirname(os.path.abspath(__file__))
+    cands = [os.path.join(here, 'football_data'),
+             os.path.join(os.path.dirname(here), 'football_data'),
+             os.path.join(os.path.dirname(os.path.dirname(here)), 'football_data')]
+    if os.environ.get('GATE_WS'):
+        cands.insert(0, os.path.join(os.environ['GATE_WS'], 'football_data'))
+    for c in cands:
+        if os.path.isdir(c) and any(f.endswith('2627.csv') for f in os.listdir(c)):
+            return c
+    return cands[0]
+
+
 def load_rows(code):
-    fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'football_data', f'{code}_2627.csv')
+    fp = os.path.join(data_dir(), f'{code}_2627.csv')
     return list(csv.DictReader(open(fp, encoding='utf-8-sig')))
 
 def standings(rows):
@@ -60,8 +73,14 @@ def main(code, home, away, out=None):
     table = standings(rows)
     card = {
         'league': code, 'home': home, 'away': away,
+        # 全表直出：只有整表才能校验"胜=负、进球=失球、场次守恒"，两行数据校验不了任何东西
+        'table': table,
+        'snapshot_at': max((r['Date'] for r in rows if r.get('Date')), default=''),
+        'source_rows': len(rows),
+        'generated_by': 'lib/fact_sheet.py',
         'standings': {x['team']: {'rank': x['rank'], 'points': x['points'], 'gd': x['gd'],
-                                  'played': x['played']}
+                                  'played': x['played'], 'w': x['w'], 'd': x['d'], 'l': x['l'],
+                                  'gf': x['gf'], 'ga': x['ga']}
                       for x in table if x['team'] in (home, away)},
         'form': {home: team_form(rows, home), away: team_form(rows, away)},
         'home_away_split': {home: home_away_split(rows, home), away: home_away_split(rows, away)},
