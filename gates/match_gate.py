@@ -13,7 +13,10 @@ match_gate.py — 单场研究闸门（逐场深度 + 最小研究时长）
 """
 import json, os, sys, datetime
 
-WS = os.path.dirname(os.path.abspath(__file__))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+WS = os.environ.get("GATE_WS") or (
+    os.path.dirname(_HERE) if os.path.basename(_HERE) == "gates" else _HERE
+)  # 同一份脚本可在 仓库根/gates 与 工作目录根 两处运行，判定口径不分叉
 MIN_SECONDS = 600  # 每场分析不少于 10 分钟
 
 # GRC 必需字段（深度闸门，缺一不可）

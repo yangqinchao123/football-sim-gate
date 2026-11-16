@@ -11,6 +11,11 @@
 """
 import json, os, re, sys
 
+_HERE = os.path.dirname(os.path.abspath(__file__))
+WS = os.environ.get("GATE_WS") or (
+    os.path.dirname(_HERE) if os.path.basename(_HERE) == "gates" else _HERE
+)  # 同一份脚本可在 仓库根/gates 与 工作目录根 两处运行，判定口径不分叉
+
 MIN_ROUND_LEN = 30
 # 空话/套话黑名单（命中且无其他实质证据即判空）
 EMPTY_PHRASES = ["已讨论", "同意", "维持原判", "无异议", "综合判断", "我将", "持续推进",
@@ -106,7 +111,7 @@ if __name__ == "__main__":
     all_errs = []
     for p in sys.argv[1:]:
         all_errs += check_clash(p)
-    base = os.path.dirname(os.path.abspath(__file__))
+    base = WS
     all_errs += check_independent_model([os.path.join(base, "audit_g1"), os.path.join(base, "audit_g2")])
     if all_errs:
         print("BLOCK — 实质闸门未过：")

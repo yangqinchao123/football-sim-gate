@@ -15,7 +15,10 @@
 import json, os, sys, glob, re
 
 # 产物在仓库根，不在 gates/ 内（此前指向 gates/ 导致根目录跑必 FileNotFoundError，闸门从未真正执行）
-WS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+WS = os.environ.get("GATE_WS") or (
+    os.path.dirname(_HERE) if os.path.basename(_HERE) == "gates" else _HERE
+)  # 同一份脚本可在 仓库根/gates 与 工作目录根 两处运行，判定口径不分叉
 
 def main(batch):
     model = json.load(open(os.path.join(WS, f"{batch}_model_out.json")))
