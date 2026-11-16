@@ -44,6 +44,13 @@ ROI／注码／余额不参与过关判定；为提高准确率而增加的可�
 ## 平台限制
 - 私有免费仓库不支持服务端分支保护；本仓库为**公开**，故保护免费可用，已开启。
 
+## 事实层：数字要能自证
+- 事实卡片必须整表直出（`table` 全联盟），只给两行等于无法校验。
+- 不变量：Σ胜=Σ负、Σ进球=Σ失球、场次=胜+平+负、积分=3胜+平、净胜=进-失、场次极差≤2。
+- `snapshot_at` / `source_rows` / `generated_by=lib/fact_sheet.py` 缺一不可；手写卡片不认。
+- 有源 CSV 时按 `snapshot_at` 重算整表逐队比对（`lib/fact_rules.py`，S4 与 `tools/fact_check.py` 同一套逻辑）。
+- 回归用例：积分改 1 分、进球改 1 个、只给两行、缺日期、手写，五种都要被拦。
+
 ## CI 供应链
 - action 一律 pin 到 40 位 commit SHA（`tools/check_pins.py` 强制，且带反向自测）。
 - 工作流顶层 `permissions: contents: read`，不继承默认宽权限；同分支重复触发自动取消。
