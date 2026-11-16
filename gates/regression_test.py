@@ -101,18 +101,34 @@ case("S5 缺 no_bet.json → BLOCK", False, "S5", missing_nb)
 case("S5 场次缺方向 → BLOCK", False, "S5", bad_dir)
 
 
-# ---------- S7 三案 ----------
-def s7_fixtures(root, rounds, with_agent=True):
-    rec1 = {"num": "001", "rounds": rounds, "verdict": "agrees", "final": "H"}
+# ---------- S7 独立性 ----------
+def s7_fixtures(root, rounds, with_agent=True, same_producer=False, same_run=False,
+                share_input=False, same_probs=False):
+    rec1 = {"num": "001", "rounds": rounds, "verdict": "agrees", "final": "H",
+            "probs": [0.42, 0.28, 0.30]}
     if rounds >= 1:
         rec1["round1"] = "红队：主队近5场1胜，主场优势被高估"
     if rounds >= 2:
         rec1["round2"] = "主方：对手头号射手停赛，替代者三问已核，主队xG 1.8"
-    d1 = {"items": [rec1]}
+    d1 = {"items": [rec1],
+          "provenance": {"producer": "sub-red-001" if not same_producer else "sub-x",
+                         "run_id": "run-A" if not same_run else "run-X",
+                         "started_at": "2026-01-01T09:00", "finished_at": "2026-01-01T09:12",
+                         "output_sha256": "o1"},
+          "independence": {"inputs": [{"name": "g0D99_parsed.json", "sha256": "h1"},
+                                      {"name": "D99_model_out.json", "sha256": "h2"}]}}
     if with_agent:
         d1["agent"] = "sub-red-001"
-    d2 = {"_agent": "sub-audit-002", "周日001": {"clash_rounds": rounds, "verdict": "agrees",
-                                                 "round1": "审计：流程缺伤停双源", "round2": "主方：已补双源记录"}}
+    d2 = {"_agent": "sub-audit-002",
+          "provenance": {"producer": "sub-audit-002" if not same_producer else "sub-x",
+                         "run_id": "run-B" if not same_run else "run-X",
+                         "started_at": "2026-01-01T09:20", "finished_at": "2026-01-01T09:31",
+                         "output_sha256": "o2"},
+          "independence": {"inputs": [{"name": "g0D99_parsed.json", "sha256": "h1"},
+                                      {"name": "clash_record.json", "sha256": "o1" if share_input else "h3"}]},
+          "周日001": {"clash_rounds": rounds, "verdict": "agrees",
+                      "round1": "审计：流程缺伤停双源", "round2": "主方：已补双源记录",
+                      "probs": [0.42, 0.28, 0.30] if same_probs else [0.38, 0.30, 0.32]}}
     if rounds < 2:
         d2["周日001"].pop("round2", None)
     w(os.path.join(root, "audit_g1", "clash_record.json"), d1)
@@ -125,6 +141,10 @@ case("S7 agrees + 0 轮 → BLOCK", False, "S7", lambda r: s7_fixtures(r, 0))
 case("S7 agrees + 1 轮 → BLOCK", False, "S7", lambda r: s7_fixtures(r, 1))
 case("S7 agrees + 2 轮真对质 → PASS", True, "S7", lambda r: s7_fixtures(r, 2))
 case("S7 缺 agent 署名 → BLOCK", False, "S7", lambda r: s7_fixtures(r, 2, with_agent=False))
+case("S7 两份产物 producer 相同 → BLOCK", False, "S7", lambda r: s7_fixtures(r, 2, same_producer=True))
+case("S7 两份产物 run_id 相同 → BLOCK", False, "S7", lambda r: s7_fixtures(r, 2, same_run=True))
+case("S7 一方输入含另一方产物哈希 → BLOCK", False, "S7", lambda r: s7_fixtures(r, 2, share_input=True))
+case("S7 两份概率逐场相同（复制）→ BLOCK", False, "S7", lambda r: s7_fixtures(r, 2, same_probs=True))
 
 
 # ---------- S11 篡改案 ----------
@@ -140,18 +160,53 @@ def s11_tamper(root):
 case("S11 赛后改方向 → BLOCK", False, "S11", s11_tamper)
 
 
-# ---------- S4 事实层四案 ----------
-def s4_fixtures(root, with_fact=True, cite=True, conflict=False):
+# ---------- S4 事实层 ----------
+MATCHES = [("A队", "B队", 2, 1), ("C队", "D队", 1, 1), ("E队", "F队", 0, 3),
+           ("G队", "H队", 2, 2), ("I队", "J队", 1, 0),
+           ("B队", "A队", 1, 1), ("D队", "C队", 2, 0), ("F队", "E队", 1, 1),
+           ("H队", "G队", 0, 1), ("J队", "I队", 3, 2)]
+
+
+def synth_table(matches):
+    """按比赛结果生成积分榜：胜=负、进球=失球由构造保证，便于测试不变量。"""
+    tab = {}
+    for h, a, gh, ga in matches:
+        for t, gf, gc in ((h, gh, ga), (a, ga, gh)):
+            p = tab.setdefault(t, {"team": t, "played": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0})
+            p["played"] += 1
+            p["w"] += 1 if gf > gc else 0
+            p["d"] += 1 if gf == gc else 0
+            p["l"] += 1 if gf < gc else 0
+            p["gf"] += gf
+            p["ga"] += gc
+    rows = []
+    for p in tab.values():
+        p["points"] = 3 * p["w"] + p["d"]
+        p["gd"] = p["gf"] - p["ga"]
+        rows.append(p)
+    rows.sort(key=lambda x: (-x["points"], -x["gd"]))
+    for i, r in enumerate(rows):
+        r["rank"] = i + 1
+    return rows
+
+
+def s4_fixtures(root, with_fact=True, cite=True, conflict=False, mutate=None):
     w(os.path.join(root, "%s_config.json" % BATCH), {"legs": ["005"], "min_picks": 1})
     fact_name = "%s_fact_005.json" % BATCH
     inj_name = "%s_injury_005.json" % BATCH
     if with_fact:
-        w(os.path.join(root, fact_name), {
-            "league": "E0", "home": "A队", "away": "B队",
-            "standings": {"A队": {"rank": 3, "points": 20, "gd": 6, "played": 12},
-                          "B队": {"rank": 11, "points": 12, "gd": -4, "played": 12}},
-            "form": {"A队": [{"res": "W"}], "B队": [{"res": "L"}]},
-            "source": "football_data/E0_2627.csv（脚本直出）"})
+        table = synth_table(MATCHES)
+        by = {r["team"]: r for r in table}
+        card = {
+            "league": "E0", "home": "A队", "away": "B队", "table": table,
+            "snapshot_at": "2026-01-01", "source_rows": 10, "generated_by": "lib/fact_sheet.py",
+            "standings": {t: {k: by[t][k] for k in ("rank", "points", "gd", "played", "w", "d", "l", "gf", "ga")}
+                          for t in ("A队", "B队")},
+            "form": {"A队": [{"res": "H"}, {"res": "D"}], "B队": [{"res": "A"}, {"res": "H"}]},
+            "source": "football_data/E0_2627.csv（脚本直出）"}
+        if mutate:
+            mutate(card)
+        w(os.path.join(root, fact_name), card)
     w(os.path.join(root, inj_name), {
         "num": "005", "team": "A队", "collected_at": "2026-01-01T10:00",
         "confirmed": ["前锋甲"], "unconfirmed": [],
@@ -171,10 +226,36 @@ def s4_write_grc(root, body):
         f.write(body)
 
 
+def _tamper_points(card):
+    card["table"][0]["points"] += 1
+
+
+def _tamper_goals(card):
+    card["table"][0]["gf"] += 1
+
+
+def _drop_table(card):
+    card.pop("table")
+
+
+def _drop_snapshot(card):
+    card.pop("snapshot_at")
+
+
+def _handwritten(card):
+    card["generated_by"] = "手写"
+
+
 case("S4 进票腿无事实卡片 → BLOCK", False, "S4", lambda r: s4_fixtures(r, with_fact=False))
 case("S4 GRC 未引用事实卡片 → BLOCK", False, "S4", lambda r: s4_fixtures(r, cite=False))
 case("S4 伤停双源状态冲突 → BLOCK", False, "S4", lambda r: s4_fixtures(r, conflict=True))
 case("S4 事实卡片+伤停双源+GRC 引用 → PASS", True, "S4", lambda r: s4_fixtures(r))
+case("S4 卡片积分被改（3胜+平对不上）→ BLOCK", False, "S4",
+     lambda r: s4_fixtures(r, mutate=_tamper_points))
+case("S4 卡片进球被改（Σ进≠Σ失）→ BLOCK", False, "S4", lambda r: s4_fixtures(r, mutate=_tamper_goals))
+case("S4 卡片只给两行、不入整表 → BLOCK", False, "S4", lambda r: s4_fixtures(r, mutate=_drop_table))
+case("S4 卡片缺 snapshot_at → BLOCK", False, "S4", lambda r: s4_fixtures(r, mutate=_drop_snapshot))
+case("S4 手写卡片（generated_by 非脚本）→ BLOCK", False, "S4", lambda r: s4_fixtures(r, mutate=_handwritten))
 
 
 # ---------- S6 改序三案 ----------
