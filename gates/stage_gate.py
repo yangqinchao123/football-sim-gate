@@ -302,7 +302,25 @@ def chk_S6(c):
     n = len(o.get("approved_nums", []))
     if n < 1:
         return False, "确认场次为空"
-    return True, "owner 已确认 %d 场方向（%s）" % (n, o.get("ts"))
+
+    # owner 方向必须等于模型最高项；不同则须留改序记录（三要素缺一即拒）
+    mo = os.path.join(WS, "%s_model_out.json" % c.batch)
+    dirs = o.get("directions") or {}
+    if os.path.exists(mo):
+        models = json.load(open(mo))
+        for num in o.get("approved_nums", []):
+            d = str((dirs.get(num) or {}).get("dir", "")).strip().upper()[:1]
+            pb = (models.get(num) or {}).get("pb_dc")
+            if not d or not isinstance(pb, list) or len(pb) != 3:
+                continue  # 无模型场无法判改序
+            arg = "HDA"[max(range(3), key=lambda i: pb[i])]
+            if d != arg:
+                ov = (o.get("overrides") or {}).get(num) or {}
+                miss = [k for k in ("evidence", "falsifiable", "replacement") if not ov.get(k)]
+                if miss:
+                    return False, "场%s owner 方向 %s ≠ 模型最高项 %s，改序记录缺 %s" % (
+                        num, d, arg, "/".join(miss))
+    return True, "owner 已确认 %d 场方向（%s），方向与模型一致或已附改序记录" % (n, o.get("ts"))
 
 
 def _s7_items(d):
