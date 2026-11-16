@@ -329,6 +329,90 @@ case("S6 方向≠融合基准但三要素齐全 → PASS", True, "S6",
                                      "replacement": "替补改三中卫，边路传中占比提升"}))
 
 
+# ---------- S2 情报卡机器校验（2026-11-16 D43 001 事故反向用例）----------
+def s2_intel_fixtures(root, points_wrong=False, no_points=False):
+    w(os.path.join(root, "%s_config.json" % BATCH), {"legs": [], "min_picks": 1, "min_tq": 3})
+    os.makedirs(os.path.join(root, "tq_%s" % BATCH), exist_ok=True)
+    n = 3
+    nums = ["周日%03d" % i for i in range(1, n + 1)]
+    w(os.path.join(root, "daily", DAY, "%s_双源交叉验证.md" % BATCH), {})
+    for i, num in enumerate(nums, 1):
+        tail = "%03d" % i
+        with open(os.path.join(root, "tq_%s" % BATCH, "ai_%s.txt" % tail), "w") as f:
+            f.write("甲队5战2胜1平2负积7分列第2，乙队5战0胜5平积5分列第3")
+        claim = {"type": "战意", "text": "甲队平局即守第二，乙队必须取胜",
+                 "sources": ["https://example.com/intel"]}
+        if points_wrong:
+            claim["points"] = {"home": 7, "away": 5}
+            claim["points_source"] = "tq"
+            claim["leader"] = "home"
+        elif no_points:
+            pass
+        else:
+            claim["points"] = {"home": 5, "away": 7}
+            claim["points_source"] = "tq"
+            claim["leader"] = "away"
+        w(os.path.join(root, "%s_intel_%s.json" % (BATCH, tail)),
+          {"batch": BATCH, "num": num, "home": "乙队", "away": "甲队",
+           "collected_at": "x", "claims": [claim], "single_source": []})
+
+
+case("S2 情报战意积分张冠李戴（001 事故）→ BLOCK", False, "S2",
+     lambda r: s2_intel_fixtures(r, points_wrong=True))
+case("S2 战意无积分也无说明 → BLOCK", False, "S2",
+     lambda r: s2_intel_fixtures(r, no_points=True))
+case("S2 情报卡结构完整且积分与探球一致 → PASS", True, "S2",
+     lambda r: s2_intel_fixtures(r, points_wrong=False))
+
+
+# ---------- S4 无进票腿仍须过事实层（2026-11-16 豁免漏洞反向用例）----------
+INTL_TEAMS = ["TeamA", "TeamB", "TeamC", "TeamD", "TeamE", "TeamF", "TeamG", "TeamH"]
+
+
+def _mk_intl_csv(root):
+    """造 8 队 4 轮欧国联结果库，够 fact_rules_intl 复算。"""
+    d = os.path.join(root, "football_data_intl")
+    os.makedirs(d, exist_ok=True)
+    rows = []
+    for rd in range(4):
+        for i in range(0, 8, 2):
+            h, a = INTL_TEAMS[(i + rd) % 8], INTL_TEAMS[(i + 1 + rd) % 8]
+            rows.append({"date": "2026-09-%02d" % (1 + rd * 5), "home_team": h, "away_team": a,
+                         "home_score": str(1 + (rd + i) % 3), "away_score": str((rd + i) % 2),
+                         "tournament": "UEFA Nations League"})
+    p = os.path.join(d, "results.csv")
+    with open(p, "w", newline="") as f:
+        writer = __import__("csv").DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    return p
+
+
+def s4_legless_fixtures(root, tamper=False, no_facts=False):
+    csv_path = _mk_intl_csv(root)
+    w(os.path.join(root, "daily", DAY, "%s_无进票腿声明.md" % BATCH), {})
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from lib import fact_sheet_intl as FSI
+    FSI.csv_path = lambda: csv_path          # 测试用 fixture，不碰真实数据
+    if no_facts:
+        return
+    for num in ("周日001", "周日002", "周日003"):
+        tail = num[-3:]
+        card = FSI.build(INTL_TEAMS[0], INTL_TEAMS[1], "2026-11-16")
+        card["meta"] = {"data_lag_flag": True}
+        if tamper:
+            card["table"][0]["points"] += 30   # 手改数字，应被复算抓住
+        w(os.path.join(root, "%s_fact_%s.json" % (BATCH, tail)), card)
+
+
+case("S4 声明无进票腿但一张事实卡都没有 → BLOCK", False, "S4",
+     lambda r: s4_legless_fixtures(r, no_facts=True))
+case("S4 事实卡数字被手改（复算对不上）→ BLOCK", False, "S4",
+     lambda r: s4_legless_fixtures(r, tamper=True))
+case("S4 无进票腿但 8 场事实卡全过校验 → PASS", True, "S4",
+     lambda r: s4_legless_fixtures(r))
+
+
 # ---------- S8/S9/S10 空仓豁免 ----------
 import hashlib
 

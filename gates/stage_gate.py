@@ -24,6 +24,7 @@ import json
 import os
 import re
 import sys
+import sys
 import datetime
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -150,8 +151,43 @@ def chk_S2(c):
                 return False, "探球不可用留痕缺 %s（禁止口头声明）" % k
     if not cross:
         return False, "缺双源交叉验证"
+    # 情报卡结构化校验：战意须带积分并与探球原文/事实卡三方一致，伤停人名须能在探球原文找到
+    if tq:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        try:
+            from lib import intel_rules
+        except Exception as e:
+            return False, "缺 lib/intel_rules.py，情报无法机器校验（%s）" % e
+        g0p = os.path.join(WS, "g0%s_parsed.json" % c.batch)
+        nums = [r["num"] for r in json.load(open(g0p))] if os.path.exists(g0p) else []
+        bad = []
+        for num in nums:
+            card_p = None
+            for cand in ("%s_intel_%s.json" % (c.batch, num),
+                         "%s_intel_%s.json" % (c.batch, str(num)[-3:])):
+                if os.path.exists(os.path.join(WS, cand)):
+                    card_p = os.path.join(WS, cand)
+                    break
+            if not card_p:
+                bad.append("场%s 缺情报卡" % num)
+                continue
+            card = json.load(open(card_p))
+            card.setdefault("batch", c.batch)
+            card.setdefault("num", num)
+            tqp = os.path.join(WS, "tq_%s" % c.batch, "ai_%s.txt" % str(num)[-3:])
+            tqt = open(tqp, errors="ignore").read() if os.path.exists(tqp) else ""
+            fact = {}
+            fp = _find_card(c, str(num)[-3:], "fact")
+            if fp:
+                fact = json.load(open(fp))
+            for e in intel_rules.check(card, tqt, fact, picks_dir=WS):
+                bad.append("场%s %s" % (num, e))
+        if bad:
+            return False, "情报卡校验未过：" + "；".join(bad[:3])
     detail = "探球 %d 场" % len(tq) if len(tq) >= min_tq else "探球不可用(已留痕) + 公开多源"
-    return True, detail + "，双源交叉已留痕"
+    return True, detail + "，双源交叉已留痕，情报卡已机器校验"
 
 
 def chk_S3(c):
@@ -184,7 +220,38 @@ def chk_S4(c):
         decl = glob.glob(c.f("*无进票腿*"))
         if not decl:
             return False, "批次未声明 legs，也未声明『无进票腿』（禁止静默空手过闸）"
-        return True, "本批无进票腿，已显式声明"
+        # 无票不等于免检：事实层必须照跑，否则"只预测"的批次事实错了也没人管
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        try:
+            from lib import fact_rules as fr, fact_rules_intl as fri
+        except Exception as e:
+            return False, "缺事实层校验模块（%s）" % e
+        g0p = os.path.join(WS, "g0%s_parsed.json" % c.batch)
+        nums = [str(r["num"])[-3:] for r in json.load(open(g0p))] if os.path.exists(g0p) else []
+        csv_intl = None
+        for cand in (os.path.join(WS, "football_data_intl", "results.csv"),
+                     os.path.join(os.path.dirname(WS), "football_data_intl", "results.csv")):
+            if os.path.exists(cand):
+                csv_intl = cand
+                break
+        bad = []
+        for n in nums:
+            fp = _find_card(c, n, "fact")
+            if not fp:
+                bad.append("场%s 缺事实卡片" % n)
+                continue
+            card = json.load(open(fp))
+            if card.get("source_kind") == "intl":
+                errs = fri.check(card, csv_intl)
+            else:
+                ddir = os.path.join(WS, "football_data")
+                errs = fr.check(card, ddir if os.path.isdir(ddir) else None)
+            bad.extend("场%s %s" % (n, e) for e in (errs or [])[:2])
+        if bad:
+            return False, "无进票腿但仍须事实层通过：" + "；".join(bad[:3])
+        return True, "本批无进票腿，已显式声明；事实层 %d 场已校验" % len(nums)
     if not grc:
         return False, "缺完整 GRC 文件"
     text = "".join(open(p, errors="ignore").read() for p in grc)
