@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # action 的 SHA 也要维护：靠机器提 PR，人只负责看差异后合并
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps"
