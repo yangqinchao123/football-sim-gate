@@ -26,8 +26,11 @@ import re
 import sys
 import datetime
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-WS = ROOT   # 修正：历史版本 WS=dirname(__file__)=gates/，所有产物路径错位，闸门恒 BLOCK
+_HERE = os.path.dirname(os.path.abspath(__file__))
+WS = os.environ.get("GATE_WS") or (
+    os.path.dirname(_HERE) if os.path.basename(_HERE) == "gates" else _HERE
+)  # 同一份脚本可在 仓库根/gates 与 工作目录根 两处运行，判定口径不分叉
+ROOT = WS
 
 # ---- v3.2.1 门禁对齐：只豁免规则落地前已合并的历史批次，新批次一律适用 ----
 GRANDFATHER_PRED_LOCK = {"D42"}      # D42 合并时无预测锁定机制；其命中率不得计入准确率样本
