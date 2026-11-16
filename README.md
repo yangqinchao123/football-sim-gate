@@ -3,7 +3,7 @@
 竞彩足球模拟盘的硬闸门 CI 仓库。目标：把 G1–G6 流程从"靠自觉"变成"云端强制"，检查不过无法合并。
 
 ## 目录
-- `framework/`：硬框架 v3.2 全文 + **v3.2.1 门禁对齐补丁（当前口径，冲突以它为准）**
+- `framework/`：**`框架_当前_v3.2.2_20261116.md` 是唯一当前权威**（v3.2 全文 + 门禁对齐 + 今日修订已并入）；旧版在 `framework/archive/` 并标 SUPERSEDED
 - `gates/`：闸门脚本（状态机、实质、空仓、出票前检查、反向回归测试）
 - `lib/`：事实卡片、伤停核查、平局校准
 - `calib/`：平局 isotonic 校准表
@@ -44,6 +44,19 @@ ROI／注码／余额不参与过关判定；为提高准确率而增加的可�
 ## 平台限制
 - 私有免费仓库不支持服务端分支保护；本仓库为**公开**，故保护免费可用，已开启。
 
+## 子 agent 独立性：痕迹代替署名
+- 两份碰撞产物各须带 `provenance`：producer / run_id / started_at / finished_at / output_sha256。
+- `producer` 不得相同、`run_id` 不得相同；一方输入里含另一方 `output_sha256` 即交叉读取，判 BLOCK。
+- 每场须有该 agent 自建的 `probs[h,d,a]`；两份逐场概率最大差 ≤0.005 即判定为复制。
+- 共享原始数据（早盘 SP、赛程）允许；只有读到对方的产物才算不独立。
+
+## 事实层：数字要能自证
+- 事实卡片必须整表直出（`table` 全联盟），只给两行等于无法校验。
+- 不变量：Σ胜=Σ负、Σ进球=Σ失球、场次=胜+平+负、积分=3胜+平、净胜=进-失、场次极差≤2。
+- `snapshot_at` / `source_rows` / `generated_by=lib/fact_sheet.py` 缺一不可；手写卡片不认。
+- 有源 CSV 时按 `snapshot_at` 重算整表逐队比对（`lib/fact_rules.py`，S4 与 `tools/fact_check.py` 同一套逻辑）。
+- 回归用例：积分改 1 分、进球改 1 个、只给两行、缺日期、手写，五种都要被拦。
+
 ## CI 供应链
 - action 一律 pin 到 40 位 commit SHA（`tools/check_pins.py` 强制，且带反向自测）。
 - 工作流顶层 `permissions: contents: read`，不继承默认宽权限；同分支重复触发自动取消。
@@ -77,11 +90,10 @@ ROI／注码／余额不参与过关判定；为提高准确率而增加的可�
 - 密码/密钥禁止入库，CI 与本地钩子都会拦截；探球密码只走环境变量 TQ_PW。
 - 前闸不过不进下闸；独立碰撞红队无条件对立；风险点不解决不下桌。
 
-## v3.2.1 新增的两道可核项
-1. **预测锁定**：出表后跑 `python3 tools/lock_predictions.py <批次>`，写 `_meta.locked_at` + 指纹；
-   S5 校验存在、S11 赛后复核指纹。**赛后改方向＝本批命中率作废。**
-   D42 无锁定，按规定不计入准确率样本。
-2. **空仓场必须举证**：非进票腿要么 NO_BET 且标 N 码，要么 ELIGIBLE 且写 `reject.reason + evidence`；
-   只填方向的"免检方向"过不了 S5。
-3. **红队不许靠 agrees 免对质**：任何条目都须 `rounds>=2` + `round1/round2`，两份产物须有 agent 署名。
-4. CI 增加 `gates/regression_test.py`：12 条反向用例，漏洞改没改住由它说了算，不靠自述。
+## 当前可核项（细则见框架 v3.2.2 第二部分）
+- 预测锁定与指纹（S5 校验存在、S11 赛后复核；赛后改方向=本批命中率作废）。
+- 空仓场必须举证（NO_BET+N 码，或 ELIGIBLE+reject.reason/evidence）。
+- 红队任何条目 rounds≥2 且落 round1/round2；独立性查 producer/run_id/输入哈希/概率距离。
+- 事实卡片整表直出并自证（不变量 + 源 CSV 溯源）。
+- 命中台账只计赛前锁定批次；方向基准为融合概率。
+- `gates/regression_test.py`：35 条反向用例，漏洞改没改住由它判定。
