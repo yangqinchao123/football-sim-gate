@@ -19,6 +19,7 @@ stage_gate.py — 足球模拟盘全流程阶段闸门（状态机）
   python3 gates/stage_gate.py <batch> reset --yes            # 重置状态
 """
 import glob
+import hashlib
 import json
 import os
 import re
@@ -27,6 +28,16 @@ import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WS = ROOT   # 修正：历史版本 WS=dirname(__file__)=gates/，所有产物路径错位，闸门恒 BLOCK
+
+# ---- v3.2.1 门禁对齐：只豁免规则落地前已合并的历史批次，新批次一律适用 ----
+GRANDFATHER_PRED_LOCK = {"D42"}      # D42 合并时无预测锁定机制；其命中率不得计入准确率样本
+GRANDFATHER_S5_EVIDENCE = {"D42"}    # D42 合并时无「空仓场须有闸门实跑依据」要求
+
+
+def pick_sha(items):
+    """预测内容指纹：只算比赛条目，不含 _meta，排序后序列化，避免写法差异导致假阳性。"""
+    raw = json.dumps(items, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 STAGES = [
     ("S0", "M0 数据健康前置"),
@@ -174,18 +185,73 @@ def chk_S4(c):
 
 
 def chk_S5(c):
-    """全方向表必须覆盖早盘全部场次（不再硬编码 ≥20 场）。"""
+    """全方向表：覆盖全部早盘场 + 每场有方向 + 空仓场有闸门实跑依据 + 预测已锁定。
+
+    为什么要这三条：只数条目＝方向成了免检品（空仓场不分析也能填）；不锁预测＝
+    命中率可事后改写；空仓场无实跑依据＝口头空仓。三者都会让"准确率"变成不可核数字。
+    """
     p = os.path.join(WS, "%s_final_picks.json" % c.batch)
     if not os.path.exists(p):
         return False, "缺全方向表"
     d = json.load(open(p))
+    items = {k: v for k, v in d.items() if not str(k).startswith("_")}
     g0p = os.path.join(WS, "g0%s_parsed.json" % c.batch)
     need = len(json.load(open(g0p))) if os.path.exists(g0p) else 0
-    if need and len(d) < need:
-        return False, "全方向表 %d/%d 场，覆盖不全" % (len(d), need)
-    if len(d) < int(c.cfg().get("min_picks", 1)):
+    if need and len(items) < need:
+        return False, "全方向表 %d/%d 场，覆盖不全" % (len(items), need)
+    if len(items) < int(c.cfg().get("min_picks", 1)):
         return False, "全方向表覆盖不足"
-    return True, "全方向表 %d/%d 场全覆盖，待 owner 确认" % (len(d), need)
+
+    for n, rec in items.items():
+        # 方向必须是规范字母开头；允许后缀标注（如 "H（让-4）"），但 "未知/待定" 一律拦
+        if not re.match(r"^[HDA](?:$|[（(\s：:\-])", str(rec.get("dir", "")).strip().upper()):
+            return False, "场%s 方向不合法（dir 须以 H/D/A 开头，实际 %r）" % (n, rec.get("dir"))
+
+    # 非进票腿必须有 no_bet_gate 实跑依据：NO_BET 带 N 码，或 ELIGIBLE 但写清否决理由+证据
+    if c.batch not in GRANDFATHER_S5_EVIDENCE:
+        legs = [str(x) for x in c.cfg().get("legs", [])]
+        nb_path = os.path.join(WS, "%s_no_bet.json" % c.batch)
+        for n, rec in items.items():
+            if n in legs:
+                continue
+            if not os.path.exists(nb_path):
+                return False, "场%s 非进票腿，但缺 %s_no_bet.json（须 no_bet_gate 实跑）" % (n, c.batch)
+            nb = json.load(open(nb_path))
+            key = n if n in nb else (n[-3:] if n[-3:] in nb else None)
+            if key is None:
+                return False, "场%s 无 no_bet_gate 判定记录" % n
+            e = nb[key] if isinstance(nb[key], dict) else {}
+            dec = str(e.get("decision", ""))
+            if dec == "NO_BET":
+                if not e.get("reasons"):
+                    return False, "场%s NO_BET 但无 N 规则理由" % n
+                code = str(e["reasons"][0]).split()[0]
+                if code not in str(rec.get("gate") or ""):
+                    return False, "场%s 方向表未标触发规则 %s（空仓须写清是哪条 N）" % (n, code)
+            elif dec == "ELIGIBLE":
+                rej = rec.get("reject") or {}
+                if not (rej.get("reason") and rej.get("evidence")):
+                    return False, "场%s 闸门判 ELIGIBLE 却未进票，必须给 reject.reason + evidence（防空口否决）" % n
+            else:
+                return False, "场%s no_bet 判定异常：%r" % (n, dec)
+
+    # 预测锁定：先锁方向再开赛，命中率才有分母
+    if c.batch not in GRANDFATHER_PRED_LOCK:
+        meta = d.get("_meta") or {}
+        if not meta.get("locked_at"):
+            return False, "缺 _meta.locked_at（预测未锁定，命中率不可核）"
+        if not meta.get("predictions_sha256"):
+            return False, "缺 _meta.predictions_sha256"
+        if meta["predictions_sha256"] != pick_sha(items):
+            return False, "预测内容与锁定哈希不符（锁定后被改写，须走 errata）"
+
+    exempt = []
+    if c.batch in GRANDFATHER_PRED_LOCK:
+        exempt.append("无预测锁定")
+    if c.batch in GRANDFATHER_S5_EVIDENCE:
+        exempt.append("无空仓依据校验")
+    tail = "（历史批次豁免：%s）" % "、".join(exempt) if exempt else "，空仓场有闸门依据，预测已锁"
+    return True, "全方向表 %d/%d 场全覆盖%s" % (len(items), need, tail)
 
 
 def chk_S6(c):
@@ -201,8 +267,24 @@ def chk_S6(c):
     return True, "owner 已确认 %d 场方向（%s）" % (n, o.get("ts"))
 
 
+def _s7_items(d):
+    """归一化逐项记录：兼容 list、{items/clashes/records: [...]}、{编号: 记录} 三种形态。"""
+    if isinstance(d, list):
+        return d, ""
+    agent = str(d.get("agent") or d.get("_agent") or "")
+    for k in ("items", "clashes", "records"):
+        if isinstance(d.get(k), list) and d[k]:
+            return d[k], agent
+    cand = [v for k, v in d.items() if not str(k).startswith("_") and isinstance(v, dict)]
+    return cand, agent
+
+
 def chk_S7(c):
-    """两个独立子 agent 的产物：关1 碰撞 + 关2 流程审计，缺一即 BLOCK。"""
+    """关1 碰撞 + 关2 流程审计：两份独立产物、每条都真对质。
+
+    v3.2.1：取消 verdict="agrees" 的轮次豁免——只要写 agrees 就能 0 轮过闸，
+    「红队无条件对立」会被形式满足。现在任何条目都须 rounds>=2 且有 round1/round2 记录。
+    """
     g1 = os.path.join(WS, "audit_g1", "clash_record.json")
     g2 = os.path.join(WS, "audit_g2", "clash_record_g2.json")
     r1 = os.path.join(WS, "audit_g1", "audit_g1_result.json")
@@ -212,25 +294,22 @@ def chk_S7(c):
             return False, "缺独立审计产物 %s" % os.path.relpath(p, WS)
     for p in (g1, g2):
         d = json.load(open(p))
-        if isinstance(d, list):
-            items = d
-        else:
-            items = d.get("items") or d.get("clashes") or d.get("records")
-        if not isinstance(items, list) or not items:
-            return False, "%s 无逐项记录（需 items/clashes，且不能为空）" % os.path.relpath(p, WS)
+        items, agent = _s7_items(d)
+        if not items:
+            return False, "%s 无逐项记录（items/clashes/records 或编号键，不能为空）" % os.path.relpath(p, WS)
+        if not agent:
+            return False, "%s 缺 agent/_agent 署名（无法证明来自独立 agent）" % os.path.relpath(p, WS)
         for it in items:
             if not isinstance(it, dict):
                 return False, "%s 存在非对象条目" % os.path.relpath(p, WS)
-            vs = str(it.get("verdict", ""))
-            if vs and vs != "agrees" and int(it.get("rounds") or 0) < 2:
-                return False, "分歧项 %s 仅 %s 轮（需≥2）" % (it.get("num") or it.get("id"), it.get("rounds"))
-            if (not vs) and int(it.get("rounds") or 0) == 1:
-                return False, "存在未多轮对质的条目（rounds=1 且无 verdict）"
-        # 独立性：产物必须署名非主 agent
-        agent = str(d.get("agent", ""))
-        if not agent:
-            return False, "%s 缺 agent 署名（无法证明来自独立 agent）" % os.path.relpath(p, WS)
-    return True, "关1/关2 独立碰撞收敛，分歧场多轮对质"
+            label = it.get("num") or it.get("id") or "?"
+            rounds = int(it.get("rounds") or it.get("clash_rounds") or 0)
+            rkeys = [k for k in it if re.fullmatch(r"round\d+", str(k))]
+            if rounds < 2:
+                return False, "场%s 对质 %d 轮 <2（agrees 也须真对抗两轮）" % (label, rounds)
+            if len(rkeys) < 2:
+                return False, "场%s 实际只落 %d 轮记录（需 round1/round2）" % (label, len(rkeys))
+    return True, "关1/关2 独立产物齐全，逐场 ≥2 轮真对质"
 
 
 def chk_S8(c):
@@ -280,7 +359,15 @@ def chk_S11(c):
     sett = glob.glob(c.f("*settlement*")) + glob.glob(c.f("*结算*"))
     if not sett:
         return False, "缺结算单（赛后回填）"
-    return True, "结算/归因/台账已回填"
+    # 复盘前再验一次预测指纹：赛后改方向＝把命中率做成可调数字
+    if c.batch not in GRANDFATHER_PRED_LOCK:
+        p = os.path.join(WS, "%s_final_picks.json" % c.batch)
+        d = json.load(open(p))
+        items = {k: v for k, v in d.items() if not str(k).startswith("_")}
+        meta = d.get("_meta") or {}
+        if meta.get("predictions_sha256") != pick_sha(items):
+            return False, "预测在锁定后被改写（哈希不符），本批命中率作废、须走 errata"
+    return True, "结算/归因/台账已回填，预测指纹未变"
 
 
 CHECKS = {"S0": chk_S0, "S1": chk_S1, "S2": chk_S2, "S3": chk_S3, "S4": chk_S4, "S5": chk_S5,
