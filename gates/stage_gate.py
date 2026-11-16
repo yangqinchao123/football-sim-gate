@@ -414,10 +414,71 @@ def chk_S10(c):
     return True, "出票闸门 PASS + LOCKED 单已生成"
 
 
+def _hit(d, res):
+    d = str(d or "").strip().upper()[:1]
+    return (d == res) if d in ("H", "D", "A") and res in ("H", "D", "A") else None
+
+
+def _score_result(sc):
+    try:
+        h, a = [int(x) for x in str(sc).replace("：", ":").split(":")]
+    except Exception:
+        return None
+    return "H" if h > a else ("D" if h == a else "A")
+
+
 def chk_S11(c):
     sett = glob.glob(c.f("*settlement*")) + glob.glob(c.f("*结算*"))
     if not sett:
         return False, "缺结算单（赛后回填）"
+
+    # 逐场赛果：结算单必须是结构化 json，且覆盖 owner 确认的每一场
+    st_path = os.path.join(WS, "%s_settlement.json" % c.batch)
+    if not os.path.exists(st_path):
+        return False, "缺 %s_settlement.json（赛果须落结构化记录，不能只写结论）" % c.batch
+    st = json.load(open(st_path))
+    nums = (st.get("nums") or {})
+    own = json.load(open(os.path.join(WS, "%s_owner方向确认.json" % c.batch))) if os.path.exists(
+        os.path.join(WS, "%s_owner方向确认.json" % c.batch)) else {}
+    approved = own.get("approved_nums") or []
+    for num in approved:
+        row = nums.get(num) or {}
+        if not _score_result(row.get("score")):
+            return False, "场%s 赛果缺失或无法解析（score=%s）" % (num, row.get("score"))
+
+    # 台账：每场都要有记录，方向必须与锁定方向一致，hit 必须能复算
+    lg = os.path.join(WS, "ledger", "direction_ledger.jsonl")
+    if not os.path.exists(lg):
+        return False, "缺台账 ledger/direction_ledger.jsonl（命中率没有分母就等于没有）"
+    rows = {}
+    for line in open(lg, encoding="utf-8"):
+        line = line.strip()
+        if not line:
+            continue
+        r = json.loads(line)
+        if r.get("batch") == c.batch:
+            rows[r["num"]] = r
+    locked_dir = {}
+    fp = os.path.join(WS, "%s_final_picks.json" % c.batch)
+    if os.path.exists(fp):
+        d = json.load(open(fp))
+        for k, v in d.items():
+            if not str(k).startswith("_") and isinstance(v, dict):
+                locked_dir[k] = v.get("dir")
+    for num in approved:
+        r = rows.get(num)
+        if not r:
+            return False, "场%s 未进台账（tools/ledger.py append 未跑）" % num
+        res = r.get("result") or _score_result((nums.get(num) or {}).get("score"))
+        if not res:
+            return False, "场%s 台账缺赛果" % num
+        if num in locked_dir and _hit(locked_dir[num], res) != r.get("hit"):
+            return False, "场%s 台账 hit 与锁定方向复算不一致（疑似事后改写）" % num
+        if r.get("counted"):
+            mk = r.get("market") or {}
+            if not all(mk.get(k) for k in ("h", "d", "a")):
+                return False, "场%s 计入样本但缺市场概率，无法与市场基准对比" % num
+
     # 复盘前再验一次预测指纹：赛后改方向＝把命中率做成可调数字
     if c.batch not in GRANDFATHER_PRED_LOCK:
         p = os.path.join(WS, "%s_final_picks.json" % c.batch)
