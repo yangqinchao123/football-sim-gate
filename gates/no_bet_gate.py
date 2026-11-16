@@ -8,6 +8,7 @@
   N1 数据断档且无可靠近期手动模型
   N2 模型最高概率 < 0.45（无明显优势；0.45 有 2627 样本外支撑）
   N3 H/A 去水概率差 < 0.14（均势）且无硬证据打破
+  N6 让球线 0（平手盘）：方向历史命中 35%（909 场），低置信不出手
   N4 纯泊松与 DC 首选方向不一致（模型内部分裂）
   N5 碰撞记录 final 判定"不进票"
 用法: python3 no_bet_gate.py <batch>
@@ -28,6 +29,7 @@ def main(batch):
         return m.group(1) if m else str(n)
 
     fair = {_numkey(r["num"]): r["had"].get("fair") for r in g0 if r.get("had")}
+    aline = {_numkey(r["num"]): (r.get("hhad") or {}).get("line") for r in g0}
 
     # 碰撞 final 不进票的场
     no_bet_clash = set()
@@ -79,12 +81,22 @@ def main(batch):
             diff = abs(f["h"] - f["a"])
             if diff < 0.14:
                 reasons.append("N3 H/A去水差<0.14均势")
+        ln = aline.get(_numkey(num))
+        try:
+            ln_f = abs(float(ln)) if ln is not None else None
+        except Exception:
+            ln_f = None
+        # N6 平手盘：让球线 0 的场，1X2 方向历史命中仅 35%（2526+2627 共 909 场），不出手
+        if ln_f == 0:
+            reasons.append("N6 平手盘方向低置信(历史35%)")
         if num in no_bet_clash:
             reasons.append("N5 碰撞判定不进票")
         if "ALL" in gap_block and not manual:
             reasons.append("N1 数据断档无近期手动模型")
+        conf = "high" if (ln_f or 0) >= 2 else ("low" if ln_f == 0 else "normal")
         result[num] = {"decision": "NO_BET" if reasons else "ELIGIBLE",
-                       "reasons": reasons, "top_prob": round(pmax, 3)}
+                       "reasons": reasons, "top_prob": round(pmax, 3),
+                       "handicap_line": ln, "conf_prior": conf}
 
     bets = [n for n, v in result.items() if v["decision"] == "ELIGIBLE"]
     no = {n: v["reasons"] for n, v in result.items() if v["decision"] == "NO_BET"}
