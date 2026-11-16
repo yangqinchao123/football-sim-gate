@@ -6,8 +6,8 @@
 - 注意分层：GRC 预测层每场仍必给方向（研究不能停）；本闸只管【出票层进不进票】。
 - 触发任一条件即该场空仓（不进票），并写明触发项：
   N1 数据断档且无可靠近期手动模型
-  N2 模型最高概率 < 0.40（无明显优势）
-  N3 H/A 去水概率差 < 0.10（均势）且无硬证据打破
+  N2 模型最高概率 < 0.45（无明显优势；0.45 有 2627 样本外支撑）
+  N3 H/A 去水概率差 < 0.14（均势）且无硬证据打破
   N4 纯泊松与 DC 首选方向不一致（模型内部分裂）
   N5 碰撞记录 final 判定"不进票"
 用法: python3 no_bet_gate.py <batch>
@@ -61,8 +61,8 @@ def main(batch):
         dc = rec["pb_dc"]; poi = rec.get("pb_poisson")
         names = ["H", "D", "A"]
         pmax = max(dc)
-        if pmax < 0.40:
-            reasons.append("N2 模型最高概率<0.40")
+        if pmax < 0.45:
+            reasons.append("N2 模型最高概率<0.45")
         if poi:
             if names[max(range(3), key=lambda i: poi[i])] != names[max(range(3), key=lambda i: dc[i])]:
                 reasons.append("N4 泊松与DC首选分裂")
@@ -77,8 +77,8 @@ def main(batch):
         f = fair.get(_numkey(num))
         if f:
             diff = abs(f["h"] - f["a"])
-            if diff < 0.10:
-                reasons.append("N3 H/A去水差<0.10均势")
+            if diff < 0.14:
+                reasons.append("N3 H/A去水差<0.14均势")
         if num in no_bet_clash:
             reasons.append("N5 碰撞判定不进票")
         if "ALL" in gap_block and not manual:
