@@ -329,6 +329,56 @@ case("S6 方向≠融合基准但三要素齐全 → PASS", True, "S6",
                                      "replacement": "替补改三中卫，边路传中占比提升"}))
 
 
+# ---------- S8/S9/S10 空仓豁免 ----------
+import hashlib
+
+
+def _nb(root):
+    return os.path.join(root, "%s_no_bet.json" % BATCH)
+
+
+def _sha(root, rel=None):
+    return hashlib.sha256(open(_nb(root), "rb").read()).hexdigest()
+
+
+def no_ticket_file(root, with_gate=True, decl_eligible=None, vetoes=None, bad_sha=False):
+    if decl_eligible is None:
+        decl_eligible = ["周日003"]
+    o = {"batch": BATCH, "tickets": 0, "reason": "全员否决：模型最高项均未达门槛或出票层否决",
+         "declared_by": "main-agent", "declared_at": "2026-01-01 20:00 +08:00"}
+    if with_gate:
+        o["gate_run"] = {"cmd": "python3 no_bet_gate.py %s" % BATCH, "batch": BATCH,
+                         "output_file": "%s_no_bet.json" % BATCH,
+                         "output_sha256": "0" * 64 if bad_sha else _sha(root)}
+    o["eligible"] = decl_eligible
+    if vetoes is not None:
+        o["vetoes"] = vetoes
+    w(os.path.join(root, "%s_no_ticket.json" % BATCH), o)
+
+
+def all_no_bet(root):
+    w(_nb(root), {"周日001": {"decision": "NO_BET", "reasons": ["N2"], "top_prob": 0.38},
+                  "周日002": {"decision": "NO_BET", "reasons": ["N3"], "top_prob": 0.51},
+                  "周日003": {"decision": "NO_BET", "reasons": ["N2"], "top_prob": 0.39}})
+
+
+case("S8 空仓豁免无 gate_run 依据 → BLOCK", False, "S8",
+     lambda r: no_ticket_file(r, with_gate=False, vetoes=[{"num": "周日003", "reason": "EV负", "evidence": "nb:003"}]))
+case("S8 豁免声称无可进票但产物有 ELIGIBLE → BLOCK", False, "S8",
+     lambda r: no_ticket_file(r, decl_eligible=[], vetoes=[]))
+case("S8 有可进票但缺逐场否决理由 → BLOCK", False, "S8",
+     lambda r: no_ticket_file(r, decl_eligible=["周日003"], vetoes=[]))
+case("S8 哈希与产物不符 → BLOCK", False, "S8",
+     lambda r: no_ticket_file(r, bad_sha=True,
+                              vetoes=[{"num": "周日003", "reason": "EV负", "evidence": "nb:003"}]))
+case("S8 合法豁免（产物全 NO_BET + 哈希吻合）→ PASS", True, "S8",
+     lambda r: (all_no_bet(r), no_ticket_file(r, decl_eligible=[])))
+case("S9 有可进票但未逐场否决，豁免不成立 → BLOCK", False, "S9",
+     lambda r: no_ticket_file(r, decl_eligible=["周日003"], vetoes=[]))
+case("S10 合法豁免 → PASS", True, "S10",
+     lambda r: (all_no_bet(r), no_ticket_file(r, decl_eligible=[])))
+
+
 def main():
     fails = 0
     for name, expect_pass, stage, mutate in CASES:

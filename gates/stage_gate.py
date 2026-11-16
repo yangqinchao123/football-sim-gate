@@ -458,7 +458,8 @@ def chk_S7(c):
 
 def _no_ticket(c):
     """空仓豁免：0 票批次不该被 S8/S9/S10 逼着造票。
-    必须有 <batch>_no_ticket.json，写明 tickets=0 与非空理由，否则视为未声明。"""
+    但"空仓"必须有据：<batch>_no_ticket.json 须绑定 no_bet_gate 实跑产物（哈希），
+    可进票场次须与产物一致并逐场写出否决理由，否则视为无据豁免。"""
     p = os.path.join(WS, "%s_no_ticket.json" % c.batch)
     if not os.path.exists(p):
         return None
@@ -466,17 +467,51 @@ def _no_ticket(c):
         o = json.load(open(p))
     except Exception:
         return None
-    if int(o.get("tickets", -1)) != 0:
-        return None
-    if not str(o.get("reason", "")).strip():
-        return None
+    if int(o.get("tickets", -1)) != 0 or not str(o.get("reason", "")).strip():
+        return {"_err": "tickets 不为 0 或 reason 为空"}
+
+    gr = o.get("gate_run") or {}
+    if "no_bet_gate" not in str(gr.get("cmd", "")) or str(gr.get("batch", "")) != c.batch:
+        return {"_err": "缺 gate_run 或未指向 no_bet_gate 本批次实跑"}
+    nb_rel = str(gr.get("output_file", ""))
+    sha = str(gr.get("output_sha256", "")).lower()
+    if not nb_rel or not re.fullmatch(r"[0-9a-f]{64}", sha):
+        return {"_err": "缺 output_file/output_sha256"}
+    nb_path = os.path.join(WS, nb_rel)
+    if not os.path.exists(nb_path):
+        return {"_err": "绑定产物不存在：%s" % nb_rel}
+    import hashlib
+    if hashlib.sha256(open(nb_path, "rb").read()).hexdigest() != sha:
+        return {"_err": "哈希与产物不符（产物被改过或声明写错）"}
+
+    # 产物里真实可进票的场次，必须与声明一致；decl 说没有而产物有 → 无据
+    try:
+        nb = json.load(open(nb_path))
+    except Exception:
+        return {"_err": "绑定产物不是合法 JSON"}
+    real = {k for k, v in nb.items()
+            if not str(k).startswith("_") and isinstance(v, dict)
+            and str(v.get("decision", "")).upper() == "ELIGIBLE"}
+    decl = {str(x) for x in (o.get("eligible") or [])}
+    if real != decl:
+        return {"_err": "声明可进票 %s 与产物 %s 不一致" % (sorted(decl) or "无", sorted(real) or "无")}
+    if real:
+        vetoes = {str(v.get("num")): v for v in (o.get("vetoes") or [])
+                  if isinstance(v, dict) and str(v.get("reason", "")).strip()
+                  and str(v.get("evidence", "")).strip()}
+        if not real.issubset(set(vetoes)):
+            return {"_err": "可进票场次缺逐场否决理由：%s" % sorted(real - set(vetoes))}
+    o["_eligible_n"] = len(real)
     return o
 
 
 def chk_S8(c):
     nt = _no_ticket(c)
+    if nt and "_err" in nt:
+        return False, "空仓豁免不成立：%s" % nt["_err"]
     if nt:
-        return True, "N/A 空仓豁免（0 票，无需临场）：%s" % str(nt.get("reason"))[:40]
+        return True, "N/A 空仓豁免（0 票，可进票 %d 场均逐条否决，绑定 no_bet_gate 产物）：%s" % (
+            nt.get("_eligible_n", 0), str(nt.get("reason"))[:40])
     live = os.path.join(WS, "g0%s_live_raw" % c.batch, "parsed.json")
     if not os.path.exists(live):
         return False, "缺临场 live SP（另存）"
@@ -488,6 +523,8 @@ def chk_S8(c):
 
 def chk_S9(c):
     nt = _no_ticket(c)
+    if nt and "_err" in nt:
+        return False, "空仓豁免不成立：%s" % nt["_err"]
     if nt:
         return True, "N/A 空仓豁免（0 票，无配单）：%s" % str(nt.get("reason"))[:40]
     p = os.path.join(WS, "%s_tickets.json" % c.batch)
@@ -514,6 +551,8 @@ def chk_S9(c):
 
 def chk_S10(c):
     nt = _no_ticket(c)
+    if nt and "_err" in nt:
+        return False, "空仓豁免不成立：%s" % nt["_err"]
     if nt:
         return True, "N/A 空仓豁免（0 票，无 LOCKED 单）"
     locked = glob.glob(c.f("*LOCKED*"))

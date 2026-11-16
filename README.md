@@ -90,6 +90,14 @@ ROI／注码／余额不参与过关判定；为提高准确率而增加的可�
 - 密码/密钥禁止入库，CI 与本地钩子都会拦截；探球密码只走环境变量 TQ_PW。
 - 前闸不过不进下闸；独立碰撞红队无条件对立；风险点不解决不下桌。
 
+## 空仓豁免（有据才免）
+0 票批次可跳过 S8/S9/S10，前提是 `<batch>_no_ticket.json` 满足四条：
+1. `tickets=0` 且 reason 非空；
+2. 有 `gate_run`，cmd 指向 `no_bet_gate.py <批次>`，并登记 `output_file` + `output_sha256`；
+3. 该产物的 sha256 必须与文件实际一致（产物被改过即豁免失效）；
+4. 声明 `eligible` 必须与产物里 decision=ELIGIBLE 的场次集合完全相同；有可进票场次时，
+   每个都要给 `vetoes` 的 reason+evidence。**声明"没有可进票"而产物里有 → 直接 BLOCK。**
+
 ## 当前可核项（细则见框架 v3.2.2 第二部分）
 - 预测锁定与指纹（S5 校验存在、S11 赛后复核；赛后改方向=本批命中率作废）。
 - 空仓场必须举证（NO_BET+N 码，或 ELIGIBLE+reject.reason/evidence）。
