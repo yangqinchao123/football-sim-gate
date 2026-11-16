@@ -221,6 +221,15 @@ def rps(p, y):
     return ((c1 - y1) ** 2 + (c2 - y2) ** 2) / 2.0
 
 
+def blend_dir_of(r, w=0.30):
+    m = r.get("market") or {}
+    md = r.get("model")
+    if not md or not all(m.get(k) for k in ("h", "d", "a")):
+        return None
+    p = [w * md[i] + (1 - w) * [m["h"], m["d"], m["a"]][i] for i in range(3)]
+    return "HDA"[max(range(3), key=lambda i: p[i])]
+
+
 def cmd_stats():
     allrows = read_ledger()
     excl = [r for r in allrows if not r.get("counted")]
@@ -258,6 +267,9 @@ def cmd_stats():
     print("模型最高项   %d/%d = %.1f%%" % (mod_arg, n, 100.0 * mod_arg / n))
     if mr:
         print("市场最高项   %d/%d = %.1f%%" % (mkt_arg, n, 100.0 * mkt_arg / n))
+    bl = sum(1 for r in rows if blend_dir_of(r) == r["result"] and blend_dir_of(r))
+    print("融合(w=30%%) %d/%d = %.1f%%" % (bl, n, 100.0 * bl / n))
+    if mr:
         print("RPS：模型 %.4f vs 市场 %.4f（差 %+.4f，负=模型更好）"
               % (sum(mm) / len(mm), sum(mr) / len(mr), (sum(mm) / len(mm)) - (sum(mr) / len(mr))))
     else:
