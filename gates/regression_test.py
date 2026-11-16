@@ -101,18 +101,34 @@ case("S5 缺 no_bet.json → BLOCK", False, "S5", missing_nb)
 case("S5 场次缺方向 → BLOCK", False, "S5", bad_dir)
 
 
-# ---------- S7 三案 ----------
-def s7_fixtures(root, rounds, with_agent=True):
-    rec1 = {"num": "001", "rounds": rounds, "verdict": "agrees", "final": "H"}
+# ---------- S7 独立性 ----------
+def s7_fixtures(root, rounds, with_agent=True, same_producer=False, same_run=False,
+                share_input=False, same_probs=False):
+    rec1 = {"num": "001", "rounds": rounds, "verdict": "agrees", "final": "H",
+            "probs": [0.42, 0.28, 0.30]}
     if rounds >= 1:
         rec1["round1"] = "红队：主队近5场1胜，主场优势被高估"
     if rounds >= 2:
         rec1["round2"] = "主方：对手头号射手停赛，替代者三问已核，主队xG 1.8"
-    d1 = {"items": [rec1]}
+    d1 = {"items": [rec1],
+          "provenance": {"producer": "sub-red-001" if not same_producer else "sub-x",
+                         "run_id": "run-A" if not same_run else "run-X",
+                         "started_at": "2026-01-01T09:00", "finished_at": "2026-01-01T09:12",
+                         "output_sha256": "o1"},
+          "independence": {"inputs": [{"name": "g0D99_parsed.json", "sha256": "h1"},
+                                      {"name": "D99_model_out.json", "sha256": "h2"}]}}
     if with_agent:
         d1["agent"] = "sub-red-001"
-    d2 = {"_agent": "sub-audit-002", "周日001": {"clash_rounds": rounds, "verdict": "agrees",
-                                                 "round1": "审计：流程缺伤停双源", "round2": "主方：已补双源记录"}}
+    d2 = {"_agent": "sub-audit-002",
+          "provenance": {"producer": "sub-audit-002" if not same_producer else "sub-x",
+                         "run_id": "run-B" if not same_run else "run-X",
+                         "started_at": "2026-01-01T09:20", "finished_at": "2026-01-01T09:31",
+                         "output_sha256": "o2"},
+          "independence": {"inputs": [{"name": "g0D99_parsed.json", "sha256": "h1"},
+                                      {"name": "clash_record.json", "sha256": "o1" if share_input else "h3"}]},
+          "周日001": {"clash_rounds": rounds, "verdict": "agrees",
+                      "round1": "审计：流程缺伤停双源", "round2": "主方：已补双源记录",
+                      "probs": [0.42, 0.28, 0.30] if same_probs else [0.38, 0.30, 0.32]}}
     if rounds < 2:
         d2["周日001"].pop("round2", None)
     w(os.path.join(root, "audit_g1", "clash_record.json"), d1)
@@ -125,6 +141,10 @@ case("S7 agrees + 0 轮 → BLOCK", False, "S7", lambda r: s7_fixtures(r, 0))
 case("S7 agrees + 1 轮 → BLOCK", False, "S7", lambda r: s7_fixtures(r, 1))
 case("S7 agrees + 2 轮真对质 → PASS", True, "S7", lambda r: s7_fixtures(r, 2))
 case("S7 缺 agent 署名 → BLOCK", False, "S7", lambda r: s7_fixtures(r, 2, with_agent=False))
+case("S7 两份产物 producer 相同 → BLOCK", False, "S7", lambda r: s7_fixtures(r, 2, same_producer=True))
+case("S7 两份产物 run_id 相同 → BLOCK", False, "S7", lambda r: s7_fixtures(r, 2, same_run=True))
+case("S7 一方输入含另一方产物哈希 → BLOCK", False, "S7", lambda r: s7_fixtures(r, 2, share_input=True))
+case("S7 两份概率逐场相同（复制）→ BLOCK", False, "S7", lambda r: s7_fixtures(r, 2, same_probs=True))
 
 
 # ---------- S11 篡改案 ----------
