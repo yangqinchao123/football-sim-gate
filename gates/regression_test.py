@@ -140,6 +140,43 @@ def s11_tamper(root):
 case("S11 赛后改方向 → BLOCK", False, "S11", s11_tamper)
 
 
+# ---------- S4 事实层四案 ----------
+def s4_fixtures(root, with_fact=True, cite=True, conflict=False):
+    w(os.path.join(root, "%s_config.json" % BATCH), {"legs": ["005"], "min_picks": 1})
+    fact_name = "%s_fact_005.json" % BATCH
+    inj_name = "%s_injury_005.json" % BATCH
+    if with_fact:
+        w(os.path.join(root, fact_name), {
+            "league": "E0", "home": "A队", "away": "B队",
+            "standings": {"A队": {"rank": 3, "points": 20, "gd": 6, "played": 12},
+                          "B队": {"rank": 11, "points": 12, "gd": -4, "played": 12}},
+            "form": {"A队": [{"res": "W"}], "B队": [{"res": "L"}]},
+            "source": "football_data/E0_2627.csv（脚本直出）"})
+    w(os.path.join(root, inj_name), {
+        "num": "005", "team": "A队", "collected_at": "2026-01-01T10:00",
+        "confirmed": ["前锋甲"], "unconfirmed": [],
+        "status_conflict": ["后卫乙"] if conflict else []})
+    cite_txt = ("引用：%s ，伤停：%s" % (fact_name, inj_name)) if cite else "（未引用任何卡片）"
+    body = ("# D99 完整GRC\n\n## 005\n预测首发已核\n关键对位：边路 vs 边卫\n"
+            "替代者三问：谁顶替/踢法变/终结点\nC4 与 F7 已填\n裁判：张某，场均 4.2 黄\n" + cite_txt + "\n")
+    pth = os.path.join(root, "daily", DAY, "D99_完整GRC.md")
+    os.makedirs(os.path.dirname(pth), exist_ok=True)
+    with open(pth, "w") as f:
+        f.write(body)
+
+
+def s4_write_grc(root, body):
+    pth = os.path.join(root, "daily", DAY, "D99_完整GRC.md")
+    with open(pth, "w") as f:
+        f.write(body)
+
+
+case("S4 进票腿无事实卡片 → BLOCK", False, "S4", lambda r: s4_fixtures(r, with_fact=False))
+case("S4 GRC 未引用事实卡片 → BLOCK", False, "S4", lambda r: s4_fixtures(r, cite=False))
+case("S4 伤停双源状态冲突 → BLOCK", False, "S4", lambda r: s4_fixtures(r, conflict=True))
+case("S4 事实卡片+伤停双源+GRC 引用 → PASS", True, "S4", lambda r: s4_fixtures(r))
+
+
 def main():
     fails = 0
     for name, expect_pass, stage, mutate in CASES:
