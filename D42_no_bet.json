@@ -1,42 +1,56 @@
 {
  "周日006": {
-  "decision": "ELIGIBLE",
-  "reasons": [],
-  "top_prob": 0.439
+  "decision": "NO_BET",
+  "reasons": [
+   "N2 模型最高概率<0.45"
+  ],
+  "top_prob": 0.439,
+  "handicap_line": "+1",
+  "conf_prior": "normal"
  },
  "周日007": {
   "decision": "NO_BET",
   "reasons": [
-   "N2 模型最高概率<0.40"
+   "N2 模型最高概率<0.45"
   ],
-  "top_prob": 0.377
+  "top_prob": 0.377,
+  "handicap_line": "+1",
+  "conf_prior": "normal"
  },
  "周日008": {
   "decision": "ELIGIBLE",
   "reasons": [],
-  "top_prob": 0.98
+  "top_prob": 0.98,
+  "handicap_line": "-4",
+  "conf_prior": "high"
  },
  "周日009": {
   "decision": "NO_BET",
   "reasons": [
    "N4b 手动近期形态与pb_dc首选分裂(A vs H)"
   ],
-  "top_prob": 0.542
+  "top_prob": 0.542,
+  "handicap_line": "-1",
+  "conf_prior": "normal"
  },
  "周日010": {
   "decision": "NO_BET",
   "reasons": [
    "N4b 手动近期形态与pb_dc首选分裂(A vs H)"
   ],
-  "top_prob": 0.537
+  "top_prob": 0.537,
+  "handicap_line": "-1",
+  "conf_prior": "normal"
  },
  "周日011": {
   "decision": "NO_BET",
   "reasons": [
    "N4b 手动近期形态与pb_dc首选分裂(A vs H)",
-   "N3 H/A去水差<0.10均势"
+   "N3 H/A去水差<0.14均势"
   ],
-  "top_prob": 0.489
+  "top_prob": 0.489,
+  "handicap_line": "-1",
+  "conf_prior": "normal"
  },
  "周日005": {
   "decision": "NO_BET",

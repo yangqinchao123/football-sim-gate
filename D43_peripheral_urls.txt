@@ -1,0 +1,17 @@
+# 外围浏览器采集清单(候选场)；过EdgeOne后逐场开 亚/欧/大小 三页
+周一004 冰岛vs卢森堡
+  亚 https://odds.500.com/fenxi/yazhi-1398701.shtml
+  欧 https://odds.500.com/fenxi/ouzhi-1398701.shtml
+  大小 https://odds.500.com/fenxi/daxiao-1398701.shtml
+周一005 瑞士vs苏格兰
+  亚 https://odds.500.com/fenxi/yazhi-1398647.shtml
+  欧 https://odds.500.com/fenxi/ouzhi-1398647.shtml
+  大小 https://odds.500.com/fenxi/daxiao-1398647.shtml
+周一007 北马其顿vs斯洛文尼
+  亚 https://odds.500.com/fenxi/yazhi-1398649.shtml
+  欧 https://odds.500.com/fenxi/ouzhi-1398649.shtml
+  大小 https://odds.500.com/fenxi/daxiao-1398649.shtml
+周一008 希腊vs塞尔维亚
+  亚 https://odds.500.com/fenxi/yazhi-1398694.shtml
+  欧 https://odds.500.com/fenxi/ouzhi-1398694.shtml
+  大小 https://odds.500.com/fenxi/daxiao-1398694.shtml

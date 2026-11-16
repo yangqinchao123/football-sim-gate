@@ -83,6 +83,10 @@ jobs:
           if [ -z "$BATCHES" ]; then echo "本次变更不涉及批次产物（infra-only PR）"; exit 0; fi
           for B in $BATCHES; do
             echo "===== 校验批次 $B ====="
+            if [ ! -f "${B}_goal.json" ]; then
+              echo "批次 $B 未声明目标阶段（草稿，未声明即未主张完成）→ 跳过校验"
+              continue
+            fi
             GOAL=$(python3 tools/goal_of.py "$BASE_SHA" "$B")
             echo "目标阶段 $GOAL（base/head 取高，防 PR 自行降标）"
             python3 gates/stage_gate.py "$B" verify --goal "$GOAL" || { echo "::error::批次 $B 未达到 $GOAL"; exit 1; }
