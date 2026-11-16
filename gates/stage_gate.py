@@ -31,6 +31,11 @@ WS = os.environ.get("GATE_WS") or (
     os.path.dirname(_HERE) if os.path.basename(_HERE) == "gates" else _HERE
 )  # 同一份脚本可在 仓库根/gates 与 工作目录根 两处运行，判定口径不分叉
 ROOT = WS
+sys.path.insert(0, os.path.join(WS, "lib"))
+try:
+    import fact_rules
+except Exception as _e:  # 缺库即视为环境问题，后续 S4 会明确报缺
+    fact_rules = None
 
 # ---- v3.2.1 门禁对齐：只豁免规则落地前已合并的历史批次，新批次一律适用 ----
 GRANDFATHER_PRED_LOCK = {"D42"}
@@ -209,6 +214,18 @@ def chk_S4(c):
             return False, "场%s 事实卡片缺双方积分榜数据" % n
         if os.path.basename(fact) not in blk:
             return False, "场%s GRC 未引用事实卡片 %s" % (n, os.path.basename(fact))
+        # 数字自证：整表不变量 + 源 CSV 溯源复算（不能只有两行"看起来对"的数字）
+        if fact_rules is None:
+            return False, "缺 lib/fact_rules.py，事实层无法校验"
+        ddir = None
+        for cand in (os.path.join(WS, "football_data"), os.path.join(WS, "lib", "football_data"),
+                     os.path.join(os.path.dirname(WS), "football_data")):
+            if os.path.isdir(cand):
+                ddir = cand
+                break
+        errs = fact_rules.check(card, ddir)
+        if errs:
+            return False, "场%s 事实卡片校验失败：%s" % (n, errs[0])
 
         # 伤停层：必须双源比对结果，冲突未解决不许进票
         inj = _find_card(c, n, "injury")
