@@ -45,6 +45,9 @@ jobs:
       - name: Gate regression test (反向用例必须 BLOCK)
         run: python gates/regression_test.py
 
+      - name: Calibration map check (校准表结构+单调性)
+        run: python lib/calib_check.py
+
       # 关键：门禁必须真的"判定"，不能只编译。对本次变更涉及的每个批次，
       # 重算 S0..goal 全部阶段，任一 BLOCK 即红叉、不可合并。
       - name: Stage gate verify (批次状态机)

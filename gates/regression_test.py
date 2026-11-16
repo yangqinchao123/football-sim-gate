@@ -177,6 +177,26 @@ case("S4 伤停双源状态冲突 → BLOCK", False, "S4", lambda r: s4_fixtures
 case("S4 事实卡片+伤停双源+GRC 引用 → PASS", True, "S4", lambda r: s4_fixtures(r))
 
 
+# ---------- S6 改序三案 ----------
+def s6_fixtures(root, dir_="A", override=None):
+    w(os.path.join(root, "%s_model_out.json" % BATCH), {
+        "周日001": {"pb_dc": [0.52, 0.27, 0.21]},
+        "周日002": {"pb_dc": [0.45, 0.30, 0.25]},
+        "周日003": {"pb_dc": [0.46, 0.28, 0.26]}})
+    o = {"batch": BATCH, "confirmed": True, "approved_nums": ["周日001"],
+         "directions": {"周日001": {"dir": dir_}}, "ts": "2026-01-01 12:00"}
+    if override:
+        o["overrides"] = {"周日001": override}
+    w(os.path.join(root, "daily", DAY, "%s_owner方向确认.json" % BATCH), o)
+
+
+case("S6 owner 方向=模型最高项 → PASS", True, "S6", lambda r: s6_fixtures(r, "H"))
+case("S6 owner 改序无记录 → BLOCK", False, "S6", lambda r: s6_fixtures(r, "A"))
+case("S6 owner 改序三要素齐全 → PASS", True, "S6",
+     lambda r: s6_fixtures(r, "A", {"evidence": "B队头号射手停赛", "falsifiable": "若首发名单有他却输则翻车",
+                                    "replacement": "替补边路改三中卫"}))
+
+
 def main():
     fails = 0
     for name, expect_pass, stage, mutate in CASES:
