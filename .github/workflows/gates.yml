@@ -41,6 +41,10 @@ jobs:
       - name: Gate smoke test
         run: python gates/smoke_test.py
 
+      # 反向用例：漏洞必须被拦。改闸门不验证"拦不拦得住"，等于没改。
+      - name: Gate regression test (反向用例必须 BLOCK)
+        run: python gates/regression_test.py
+
       # 关键：门禁必须真的"判定"，不能只编译。对本次变更涉及的每个批次，
       # 重算 S0..goal 全部阶段，任一 BLOCK 即红叉、不可合并。
       - name: Stage gate verify (批次状态机)
