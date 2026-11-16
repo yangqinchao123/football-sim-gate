@@ -1,0 +1,33 @@
+{
+ "batch": "D42",
+ "tickets": 0,
+ "reason": "闸门实跑 006/008 可进票，出票层逐条否决：006 客胜 EV -0.12；008 无 HAD 池 + 全批 hhad.single=0 不可单关 + 让-4 深盘；其余 5 场 N1/N2/N3/N4b 空仓。过闸腿不足按框架属成功风控。",
+ "declared_by": "main-agent",
+ "declared_at": "2026-11-15 22:20 +08:00",
+ "gate_run": {
+  "cmd": "python3 no_bet_gate.py D42",
+  "batch": "D42",
+  "output_file": "D42_no_bet.json",
+  "output_sha256": "a21eaa854610f828fb6f6679b84c2357020431cc2ad4e6ed472b0872631fc87c"
+ },
+ "eligible": [
+  "周日006",
+  "周日008"
+ ],
+ "vetoes": [
+  {
+   "num": "周日006",
+   "reason": "客胜 EV −0.12，负期望",
+   "evidence": "g0D42_parsed.json 006 客胜 SP 与模型 p=0.38 去水后算得 EV<0"
+  },
+  {
+   "num": "周日008",
+   "reason": "无 HAD 池（only_handicap），全批 hhad.single=0 不可单关，让 −4 深盘超出模型可靠区间",
+   "evidence": "g0D42_parsed.json 008 poolList.had 缺失 / hhad.goalLine=−4 / hhad.single=0"
+  }
+ ],
+ "evidence": [
+  "D42_no_bet.json",
+  "daily/20261115_D42/D42_无进票腿声明.md"
+ ]
+}
